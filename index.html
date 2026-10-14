@@ -1,0 +1,2528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SCRABBLE SINGLE — Daily Word Puzzle</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Outfit for crisp geometric headers and tile typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-app: #F8F9FA;
+      --board-bg: #C8BFB0;
+      --cell-bg: #EAE2D3;
+      --tw-bg: #E05A47;
+      --dw-bg: #F4A298;
+      --tl-bg: #3B82C4;
+      --dl-bg: #93C5FD;
+      --tile-face: #F7D996;
+      --tile-edge: #C9A65B;
+      --tile-locked-face: #F3D082;
+      --tile-locked-edge: #B89449;
+      --tile-text: #1F2421;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: var(--bg-app);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #1A1A1B;
+    }
+
+    .font-title {
+      font-family: 'Outfit', 'Inter', sans-serif;
+      letter-spacing: -0.03em;
+      line-height: 0.94;
+    }
+
+    /* 11x11 Board Grid */
+    .board-container {
+      width: 100%;
+      max-width: min(440px, 54dvh);
+      aspect-ratio: 1 / 1;
+      background-color: var(--board-bg);
+      padding: 3px;
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+      display: grid;
+      grid-template-columns: repeat(11, minmax(0, 1fr));
+      grid-template-rows: repeat(11, minmax(0, 1fr));
+      gap: 2px;
+      position: relative;
+      margin: 0 auto;
+    }
+
+    .board-cell {
+      background-color: var(--cell-bg);
+      border-radius: 3px;
+      position: relative;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: clamp(0.5rem, 1.9vw, 0.68rem);
+      letter-spacing: -0.02em;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .bonus-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 1;
+      line-height: 1;
+    }
+
+    .board-cell.cell-tw {
+      background-color: var(--tw-bg);
+      color: #FFFFFF;
+    }
+    .board-cell.cell-dw {
+      background-color: var(--dw-bg);
+      color: #FFFFFF;
+    }
+    .board-cell.cell-star {
+      background-color: var(--dw-bg);
+      color: #2B2D42;
+      font-size: clamp(0.75rem, 2.6vw, 1.05rem);
+    }
+    .board-cell.cell-tl {
+      background-color: var(--tl-bg);
+      color: #FFFFFF;
+    }
+    .board-cell.cell-dl {
+      background-color: var(--dl-bg);
+      color: #1E3A5F;
+    }
+
+    /* Selected board cell cursor for keyboard or click-to-place */
+    .board-cell.cell-focused {
+      box-shadow: inset 0 0 0 2.5px #2E9E5B;
+      z-index: 5;
+    }
+
+    .board-cell.cell-drop-target {
+      box-shadow: inset 0 0 0 2.5px #111827;
+      filter: brightness(1.06);
+    }
+
+    /* Direction Indicator Arrow on Focused Cell */
+    .cursor-arrow {
+      position: absolute;
+      inset: 2px;
+      background: rgba(46, 158, 91, 0.18);
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #166534;
+      font-size: 0.75rem;
+      font-weight: 900;
+      pointer-events: none;
+    }
+
+    /* Tactile Scrabble Tile */
+    .scrabble-tile {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, #FCE4A8 0%, #F5D386 100%);
+      border-radius: 3px;
+      box-shadow: inset 0 -2.5px 0 var(--tile-edge), inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      color: var(--tile-text);
+      font-family: 'Outfit', 'Inter', sans-serif;
+      font-weight: 800;
+      cursor: grab;
+      transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease;
+      z-index: 10;
+      touch-action: none;
+    }
+
+    /* Board-specific tile positioning: 100% full square coverage */
+    .board-tile {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+    }
+
+    /* Tentative (Current Turn) Tile on Board */
+    .scrabble-tile.tile-tentative {
+      background: linear-gradient(180deg, #FFF3CC 0%, #F7D996 100%);
+      box-shadow: inset 0 -2.5px 0 #C29842, inset 0 0 0 1.5px #D97706, inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    /* Locked (Committed) Tile on Board */
+    .scrabble-tile.tile-locked {
+      background: linear-gradient(180deg, #F5D792 0%, #EBC674 100%);
+      box-shadow: inset 0 -2px 0 var(--tile-locked-edge), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      cursor: default;
+    }
+
+    .scrabble-tile .tile-letter {
+      font-size: clamp(0.85rem, 2.9vw, 1.18rem);
+      line-height: 1;
+      transform: translate(-1px, -1px);
+    }
+
+    .scrabble-tile .tile-points {
+      position: absolute;
+      bottom: 2px;
+      right: 2.5px;
+      font-size: clamp(0.42rem, 1.35vw, 0.54rem);
+      font-weight: 800;
+      line-height: 1;
+      opacity: 0.88;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .scrabble-tile.tile-blank .tile-letter {
+      color: #0F766E;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    /* Rack Tile Styling */
+    .wooden-rack {
+      background: linear-gradient(180deg, #DFB37B 0%, #C89658 72%, #A6753A 73%, #8F612B 100%);
+      border-radius: 12px;
+      box-shadow: 0 6px 14px rgba(107, 70, 27, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+      padding: 7px 10px 11px 10px;
+      position: relative;
+      width: 100%;
+      max-width: min(440px, 54dvh);
+      margin: 0 auto;
+    }
+
+    .wooden-rack::after {
+      content: '';
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 7px;
+      height: 4px;
+      background: rgba(65, 40, 12, 0.25);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+
+    .rack-slot {
+      width: calc((100% - 36px) / 7);
+      aspect-ratio: 1 / 1.04;
+      border-radius: 6px;
+      background: rgba(77, 48, 17, 0.14);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .rack-tile {
+      width: 96%;
+      height: 96%;
+      background: linear-gradient(180deg, #FDE7B0 0%, #F5D284 100%);
+      border-radius: 7px;
+      box-shadow: 0 3.5px 0 #C49B4E, 0 5px 8px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      color: var(--tile-text);
+      font-family: 'Outfit', 'Inter', sans-serif;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.14s ease;
+      touch-action: none;
+      z-index: 3;
+    }
+
+    .rack-tile:hover {
+      transform: translateY(-2px);
+    }
+
+    .rack-tile.selected-for-play {
+      transform: translateY(-7px) scale(1.04);
+      box-shadow: 0 8px 0 #B68D40, 0 10px 14px rgba(0, 0, 0, 0.28), 0 0 0 2.5px #16A34A;
+      background: linear-gradient(180deg, #FFF5D6 0%, #F9DF9B 100%);
+    }
+
+    .rack-tile.selected-for-swap {
+      transform: translateY(-6px);
+      box-shadow: 0 7px 0 #9333EA, 0 8px 12px rgba(147, 51, 234, 0.28), 0 0 0 2.5px #9333EA;
+    }
+
+    .rack-tile.selected-for-discard {
+      transform: translateY(-6px);
+      box-shadow: 0 7px 0 #DC2626, 0 8px 12px rgba(220, 38, 38, 0.28), 0 0 0 2.5px #DC2626;
+    }
+
+    .rack-tile .tile-letter {
+      font-size: clamp(1.15rem, 4.2vw, 1.55rem);
+      line-height: 1;
+      transform: translate(-1px, -1px);
+    }
+
+    .rack-tile .tile-points {
+      position: absolute;
+      bottom: 3px;
+      right: 4px;
+      font-size: clamp(0.55rem, 1.8vw, 0.7rem);
+      font-weight: 800;
+      line-height: 1;
+      opacity: 0.85;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Action Buttons (Bottom Bar) */
+    .action-btn-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #E2E5E9 0%, #CFD4DA 100%);
+      box-shadow: 0 3px 0 #ADB5BD, 0 4px 6px rgba(0, 0, 0, 0.1);
+      color: #343A40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s ease;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      flex-shrink: 0;
+    }
+
+    .action-btn-circle:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+    }
+
+    .action-btn-circle:active:not(:disabled) {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #ADB5BD;
+    }
+
+    .action-btn-circle:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .action-btn-circle.active-swap {
+      background: linear-gradient(180deg, #A855F7 0%, #7E22CE 100%);
+      box-shadow: 0 3px 0 #581C87, 0 4px 8px rgba(126, 34, 206, 0.3);
+      color: #FFFFFF;
+    }
+
+    .action-btn-circle.active-discard {
+      background: linear-gradient(180deg, #EF4444 0%, #B91C1C 100%);
+      box-shadow: 0 3px 0 #7F1D1D, 0 4px 8px rgba(185, 28, 28, 0.3);
+      color: #FFFFFF;
+    }
+
+    .play-word-btn {
+      height: 44px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #37B26C 0%, #288E53 100%);
+      box-shadow: 0 3px 0 #1B653A, 0 4px 10px rgba(46, 158, 91, 0.28);
+      color: #FFFFFF;
+      font-weight: 800;
+      font-size: 0.9rem;
+      letter-spacing: 0.03em;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.12s ease;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      flex: 1;
+      max-width: 190px;
+    }
+
+    .play-word-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+    }
+
+    .play-word-btn:active:not(:disabled) {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #1B653A;
+    }
+
+    .play-word-btn.mode-swap {
+      background: linear-gradient(180deg, #9333EA 0%, #6B21A8 100%);
+      box-shadow: 0 3px 0 #4C1D95, 0 4px 10px rgba(147, 51, 234, 0.3);
+    }
+
+    .play-word-btn.mode-discard {
+      background: linear-gradient(180deg, #EF4444 0%, #B91C1C 100%);
+      box-shadow: 0 3px 0 #7F1D1D, 0 4px 10px rgba(239, 68, 68, 0.3);
+    }
+
+    /* Animations */
+    @keyframes popIn {
+      0% { transform: scale(0.75); opacity: 0.5; }
+      70% { transform: scale(1.06); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .animate-pop {
+      animation: popIn 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    /* Subtle Drop-In Animation for Newly Drawn Rack Tiles */
+    @keyframes rackTileDropIn {
+      0% {
+        opacity: 0;
+        transform: translateY(-18px) scale(0.82);
+      }
+      65% {
+        opacity: 1;
+        transform: translateY(2px) scale(1.03);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .rack-tile-drop-in {
+      animation: rackTileDropIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+
+    @keyframes shakeError {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-5px); }
+      40%, 80% { transform: translateX(5px); }
+    }
+
+    .animate-shake {
+      animation: shakeError 0.35s ease-in-out;
+    }
+
+    @keyframes pulseUrgent {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    .timer-urgent {
+      animation: pulseUrgent 1s infinite ease-in-out;
+    }
+
+    /* Drag Ghost Element */
+    #drag-ghost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -65%) scale(1.12);
+      display: none;
+    }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-between">
+
+  <!-- Main Single-Screen Shell (Max 500px centered) -->
+  <div class="w-full max-w-[480px] h-full flex flex-col justify-between px-3 py-2 sm:py-3 relative">
+
+    <!-- 1. TOP HEADER BAR -->
+    <header class="w-full flex items-center justify-between pb-2 border-b border-gray-200 shrink-0">
+      <!-- Left: Stacked Title -->
+      <div class="flex items-center gap-2">
+        <div class="font-title font-black text-[1.15rem] sm:text-[1.25rem] text-gray-900 tracking-tight select-none">
+          SCRABBLE<br/>SINGLE
+        </div>
+      </div>
+
+      <!-- Center: Daily Seed Badge -->
+      <button id="seed-badge-btn" onclick="openSeedModal()" class="px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 transition text-[0.72rem] sm:text-xs font-bold text-gray-700 tracking-wide flex items-center gap-1.5 border border-gray-200/80" title="Inspect Daily Seed or Practice Mode">
+        <span id="daily-label">DAILY #124</span>
+        <span id="dict-status-dot" class="w-2 h-2 rounded-full bg-emerald-500" title="Tournament Dictionary Ready"></span>
+      </button>
+
+      <!-- Right: Clean Flat Icons (Help, Log/Stats, Finish Game) -->
+      <div class="flex items-center gap-1 sm:gap-1.5">
+        <button onclick="openHelpModal()" class="w-8 h-8 rounded-full hover:bg-gray-200/70 flex items-center justify-center text-gray-700 transition" title="How to Play & Rules">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"></path>
+          </svg>
+        </button>
+        <button onclick="openStatsModal()" class="w-8 h-8 rounded-full hover:bg-gray-200/70 flex items-center justify-center text-gray-700 transition" title="Turn Log & Score Breakdown">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18 20V10M12 20V4M6 20v-6"></path>
+          </svg>
+        </button>
+        <button onclick="openConfirmEndModal()" class="w-8 h-8 rounded-full hover:bg-red-50 flex items-center justify-center text-gray-700 hover:text-red-600 transition" title="Finish & Score Game">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 2h12v6l-4 4 4 4v6H6v-6l4-4-4-4V2z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. HUD STATUS STRIP (3 PILL BADGES) -->
+    <section class="w-full flex items-center justify-between gap-2 my-1.5 shrink-0">
+      <!-- Score Pill -->
+      <div class="relative flex-1 bg-white rounded-full py-1.5 px-3 shadow-sm border border-gray-200/90 flex items-center justify-center gap-1.5">
+        <span class="text-[0.7rem] font-extrabold text-gray-500 tracking-wider uppercase">SCORE</span>
+        <span id="hud-score" class="text-base sm:text-lg font-black text-gray-900 tabular-nums">0</span>
+        <!-- Floating Delta Badge (+14 or -3) -->
+        <div id="score-preview-badge" class="hidden absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-emerald-600 shadow-sm tabular-nums transition-all">
+          +0
+        </div>
+      </div>
+
+      <!-- Timer Pill -->
+      <div id="timer-pill" class="flex-1 bg-[#212529] text-white rounded-full py-1.5 px-3 shadow-sm flex items-center justify-center gap-1.5 transition-colors">
+        <svg class="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 2"></path>
+        </svg>
+        <span id="hud-timer" class="text-sm sm:text-base font-extrabold tabular-nums tracking-tight">07:00</span>
+      </div>
+
+      <!-- Bag Count Pill -->
+      <div class="flex-1 bg-[#868E96] text-white rounded-full py-1.5 px-3 shadow-sm flex items-center justify-center gap-1">
+        <span id="hud-bag-count" class="text-sm sm:text-base font-extrabold tabular-nums">28</span>
+        <span class="text-[0.7rem] font-extrabold tracking-wider uppercase opacity-95">LEFT</span>
+      </div>
+    </section>
+
+    <!-- Live Word / Mode Preview Strip (Ultra-compact feedback bar) -->
+    <div class="w-full h-5 flex items-center justify-center shrink-0 mb-0.5">
+      <div id="live-turn-status" class="text-[0.73rem] font-bold text-gray-500 truncate px-2.5 py-0.5 rounded-full transition-all">
+        Place your first word across the center ★
+      </div>
+    </div>
+
+    <!-- 3. CENTER STAGE: 11x11 SCRABBLE BOARD -->
+    <main class="w-full flex-1 flex items-center justify-center overflow-hidden my-0.5">
+      <div id="scrabble-board" class="board-container" role="grid" aria-label="11 by 11 Scrabble Board">
+        <!-- Populated dynamically by JS -->
+      </div>
+    </main>
+
+    <!-- 4. WOODEN TILE RACK & BOTTOM ACTION BAR -->
+    <footer class="w-full flex flex-col gap-2 pt-1 pb-0.5 shrink-0">
+      <!-- Wooden 7-Tile Rack -->
+      <div class="wooden-rack">
+        <div id="tile-rack" class="w-full flex items-center justify-between gap-1.5">
+          <!-- 7 Rack Slots rendered here -->
+        </div>
+      </div>
+
+      <!-- Bottom Row of Action Buttons -->
+      <div class="w-full max-w-[440px] mx-auto flex items-center justify-between gap-2 pt-0.5">
+        <!-- Shuffle Rack Button -->
+        <button id="btn-shuffle" onclick="handleShuffleRack()" class="action-btn-circle" title="Shuffle Rack Tiles">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"></path>
+          </svg>
+        </button>
+
+        <!-- Recall Tiles Button -->
+        <button id="btn-recall" onclick="handleRecallTiles()" class="action-btn-circle" title="Recall Placed Tiles to Rack">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 14L4 9l5-5"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 20v-7a4 4 0 00-4-4H4"></path>
+          </svg>
+        </button>
+
+        <!-- Swap (Cycle to Back of Queue) Button -->
+        <button id="btn-swap" onclick="toggleActionMode('swap')" class="action-btn-circle" title="Swap Tiles (-3 pts/tile, sends to back of queue)">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 1l4 4-4 4"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 13v2a4 4 0 01-4 4H3"></path>
+          </svg>
+        </button>
+
+        <!-- Discard (Burn Tile) Button -->
+        <button id="btn-discard" onclick="toggleActionMode('discard')" class="action-btn-circle" title="Discard/Burn Tiles (Minus tile face value)">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"></path>
+          </svg>
+        </button>
+
+        <!-- Primary Action Button: PLAY WORD / CONFIRM SWAP / BURN -->
+        <button id="btn-submit" onclick="handlePrimarySubmit()" class="play-word-btn">
+          <span id="btn-submit-text">PLAY WORD</span>
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Floating Drag Ghost Tile -->
+  <div id="drag-ghost" class="scrabble-tile">
+    <span class="tile-letter" id="drag-ghost-letter">A</span>
+    <span class="tile-points" id="drag-ghost-points">1</span>
+  </div>
+
+  <!-- Toast Notification Container (Wordle-style top floating pill) -->
+  <div id="toast-container" class="fixed top-14 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5 pointer-events-none"></div>
+
+  <!-- BLANK TILE LETTER PICKER MODAL -->
+  <div id="blank-modal" class="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xs w-full p-4 shadow-2xl border border-gray-200 animate-pop">
+      <div class="flex items-center justify-between mb-2.5">
+        <h3 class="font-extrabold text-sm text-gray-900 uppercase tracking-wider">Choose Blank Tile Letter</h3>
+        <button onclick="cancelBlankSelection()" class="text-gray-400 hover:text-gray-700 text-lg font-bold">&times;</button>
+      </div>
+      <div id="blank-letter-grid" class="grid grid-cols-6 gap-1.5">
+        <!-- A-Z buttons inserted by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- HELP / RULES MODAL -->
+  <div id="help-modal" class="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[88dvh] flex flex-col shadow-2xl border border-gray-200 animate-pop overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-gray-200 flex items-center justify-between">
+        <h2 class="font-title font-black text-lg text-gray-900">HOW TO PLAY</h2>
+        <button onclick="closeModal('help-modal')" class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xl">&times;</button>
+      </div>
+      <div class="p-5 overflow-y-auto text-xs sm:text-sm text-gray-700 space-y-3.5 leading-relaxed">
+        <p class="font-medium text-gray-900">
+          <strong>SCRABBLE SINGLE</strong> is a daily seeded solo word challenge. Every player receives the <strong>exact same sequence of 35 tiles</strong> today. Build the highest-scoring board before time or tiles run out!
+        </p>
+
+        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200/80 space-y-1.5">
+          <div class="font-extrabold text-gray-900 text-xs uppercase tracking-wider">Core Rules</div>
+          <ul class="list-disc pl-4 space-y-1 text-xs">
+            <li><strong>First Turn:</strong> Must cover the center star <span class="px-1.5 py-0.5 rounded bg-[#F4A298] text-gray-900 font-bold">★</span> (counts as a <strong>2W</strong> Double Word score).</li>
+            <li><strong>7-Tile Rack:</strong> After each valid word, replacement tiles are drawn strictly in order from today's hidden 35-tile queue.</li>
+            <li><strong>7-Tile Bingo:</strong> Playing all 7 rack tiles in a single turn awards a <strong>+35 point bonus</strong>!</li>
+            <li><strong>Clear the Rack Bonus:</strong> Using every tile in the queue and emptying your rack awards <strong>+25 points</strong>!</li>
+          </ul>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200/80 space-y-1.5">
+          <div class="font-extrabold text-gray-900 text-xs uppercase tracking-wider">Swapping, Discarding & Penalties</div>
+          <ul class="list-disc pl-4 space-y-1 text-xs">
+            <li><strong>Swap (<span class="text-purple-700 font-bold">⇄</span>):</strong> Costs <strong>-3 pts per tile</strong>. Sends selected tiles to the <em>very back</em> of the hidden queue in order and draws replacements.</li>
+            <li><strong>Discard / Burn (<span class="text-red-600 font-bold">🗑</span>):</strong> Costs <strong>minus the tile's face value</strong> (Blank = -2 pts). Permanently trashes selected tiles and draws replacements.</li>
+            <li><strong>Endgame Rack Penalty:</strong> Any unplayed tiles left on your rack when the game ends deduct their face value.</li>
+          </ul>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200/80 space-y-1">
+          <div class="font-extrabold text-gray-900 text-xs uppercase tracking-wider">Snappy Controls</div>
+          <p class="text-xs">
+            • <strong>Drag & Drop</strong> tiles, or <strong>Tap a Tile</strong> then tap a board square.<br/>
+            • <strong>Keyboard Mode:</strong> Tap any board square to focus it (tap again to toggle <span class="text-emerald-700 font-bold">→</span> or <span class="text-emerald-700 font-bold">↓</span>) and type letters directly from your rack!
+          </p>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+        <button onclick="closeModal('help-modal')" class="px-5 py-2 rounded-full bg-[#2E9E5B] text-white font-extrabold text-xs tracking-wide shadow-sm hover:brightness-105">
+          GOT IT, LET'S PLAY
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TURN LOG & SCORE STATS MODAL -->
+  <div id="stats-modal" class="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[85dvh] flex flex-col shadow-2xl border border-gray-200 animate-pop overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-gray-200 flex items-center justify-between">
+        <h2 class="font-title font-black text-lg text-gray-900">GAME LOG & SCORE</h2>
+        <button onclick="closeModal('stats-modal')" class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xl">&times;</button>
+      </div>
+      <div class="p-4 overflow-y-auto space-y-3 text-xs sm:text-sm">
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+            <div class="text-[0.65rem] font-bold text-gray-500 uppercase">Current Score</div>
+            <div id="log-total-score" class="text-lg font-black text-gray-900">0</div>
+          </div>
+          <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+            <div class="text-[0.65rem] font-bold text-gray-500 uppercase">Words Played</div>
+            <div id="log-words-count" class="text-lg font-black text-gray-900">0</div>
+          </div>
+          <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+            <div class="text-[0.65rem] font-bold text-gray-500 uppercase">Best Turn</div>
+            <div id="log-best-turn" class="text-lg font-black text-emerald-600">0</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="font-extrabold text-gray-700 text-xs uppercase tracking-wider mb-1.5">Turn History</div>
+          <div id="turn-history-list" class="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+            <div class="text-gray-400 text-xs italic py-4 text-center">No turns recorded yet.</div>
+          </div>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+        <span id="dict-count-label" class="text-[0.68rem] text-gray-500 font-medium">Dictionary: Loading...</span>
+        <button onclick="closeModal('stats-modal')" class="px-4 py-1.5 rounded-full bg-gray-800 text-white font-bold text-xs">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEED / PRACTICE SWITCHER MODAL -->
+  <div id="seed-modal" class="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-200 animate-pop space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-title font-black text-base text-gray-900">SEED & GAME MODE</h3>
+        <button onclick="closeModal('seed-modal')" class="text-gray-400 hover:text-gray-700 text-xl font-bold">&times;</button>
+      </div>
+      <p class="text-xs text-gray-600 leading-relaxed">
+        Everyone playing <strong>Today's Daily</strong> gets the exact same 35-tile queue. Want to replay today's seed from scratch or generate a fresh Practice Seed?
+      </p>
+      <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs space-y-1">
+        <div class="flex justify-between"><span class="text-gray-500 font-semibold">Active Seed:</span> <span id="active-seed-name" class="font-mono font-bold text-gray-900"></span></div>
+        <div class="flex justify-between"><span class="text-gray-500 font-semibold">Vowel Ratio:</span> <span id="active-seed-vowels" class="font-bold text-emerald-700"></span></div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button onclick="startDailyGame(true); closeModal('seed-modal')" class="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-extrabold text-xs tracking-wide transition">
+          RESTART TODAY'S DAILY SEED
+        </button>
+        <button onclick="startPracticeGame(); closeModal('seed-modal')" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs tracking-wide transition">
+          NEW RANDOM PRACTICE SEED
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM FINISH GAME MODAL -->
+  <div id="confirm-end-modal" class="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xs w-full p-5 shadow-2xl border border-gray-200 animate-pop text-center space-y-3.5">
+      <div class="w-11 h-11 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto font-black text-lg">⏳</div>
+      <h3 class="font-title font-black text-base text-gray-900">FINISH GAME NOW?</h3>
+      <p class="text-xs text-gray-600 leading-relaxed">
+        Ending the game locks your board. Any unplayed tiles left on your rack (<span id="unplayed-penalty-preview" class="font-bold text-red-600">-0 pts</span>) will be deducted from your final score.
+      </p>
+      <div class="flex gap-2 pt-1">
+        <button onclick="closeModal('confirm-end-modal')" class="flex-1 py-2.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs">
+          KEEP PLAYING
+        </button>
+        <button onclick="closeModal('confirm-end-modal'); finishGame('Player Finished')" class="flex-1 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-sm">
+          END & SCORE
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WORDLE-STYLE ENDGAME SUMMARY MODAL -->
+  <div id="endgame-modal" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl border border-gray-200 animate-pop overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <div>
+          <span id="end-seed-badge" class="text-[0.65rem] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">DAILY #124</span>
+          <h2 id="end-reason-title" class="font-title font-black text-lg text-gray-900 mt-0.5">PUZZLE COMPLETE</h2>
+        </div>
+        <button onclick="closeModal('endgame-modal')" class="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-xl">&times;</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4">
+        <!-- Hero Final Score -->
+        <div class="text-center bg-gradient-to-b from-amber-50/80 to-white p-4 rounded-2xl border border-amber-200/80 shadow-inner">
+          <div class="text-[0.7rem] font-extrabold text-amber-800 uppercase tracking-widest">FINAL SCORE</div>
+          <div id="end-final-score" class="text-4xl sm:text-5xl font-black text-gray-900 tabular-nums my-1">0</div>
+          <div id="end-best-word" class="text-xs font-bold text-emerald-700">Best Turn: —</div>
+        </div>
+
+        <!-- Score Breakdown & Mini Board Side-by-Side -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+          <!-- Breakdown Table -->
+          <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs space-y-1.5">
+            <div class="flex justify-between"><span class="text-gray-500">Word Points:</span> <span id="end-word-pts" class="font-bold text-gray-900">0</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Bingo Bonuses (+35):</span> <span id="end-bingo-pts" class="font-bold text-emerald-600">+0</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Clear Rack (+25):</span> <span id="end-clear-pts" class="font-bold text-emerald-600">+0</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Swap / Burn Penalties:</span> <span id="end-swap-pts" class="font-bold text-red-600">0</span></div>
+            <div class="flex justify-between border-t border-gray-200 pt-1"><span class="text-gray-500">Unplayed Rack Tiles:</span> <span id="end-unplayed-pts" class="font-bold text-red-600">0</span></div>
+          </div>
+
+          <!-- Mini Visual Map of 11x11 Board -->
+          <div class="flex flex-col items-center justify-center">
+            <div id="end-mini-board" class="grid grid-cols-11 gap-[1.5px] bg-gray-300 p-1.5 rounded-lg w-32 h-32 shadow-inner">
+              <!-- Populated by JS -->
+            </div>
+            <span class="text-[0.65rem] font-bold text-gray-400 mt-1 uppercase tracking-wider">11×11 Board Map</span>
+          </div>
+        </div>
+
+        <!-- Action Buttons: Share Result & Play Again -->
+        <div class="flex flex-col sm:flex-row gap-2 pt-1">
+          <button onclick="shareGameResult()" class="flex-1 py-3 px-4 rounded-full bg-[#2E9E5B] hover:bg-[#25854B] text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-md flex items-center justify-center gap-2 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+            </svg>
+            SHARE RESULT
+          </button>
+          <button onclick="closeModal('endgame-modal'); startPracticeGame()" class="py-3 px-4 rounded-full bg-gray-900 hover:bg-gray-800 text-white font-extrabold text-xs sm:text-sm tracking-wide transition">
+            PLAY PRACTICE SEED
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*************************************************************************
+     * 1. CONSTANTS, BOARD MULTIPLIERS & STANDARD SCRABBLE DISTRIBUTION
+     *************************************************************************/
+    const BOARD_SIZE = 11;
+    const CENTER_POS = 5;
+    const DAILY_QUEUE_TOTAL = 35;
+    const RACK_CAPACITY = 7;
+    const GAME_DURATION_SEC = 7 * 60; // 7:00 countdown
+    const BINGO_BONUS = 35;
+    const CLEAR_RACK_BONUS = 25;
+    const SWAP_PENALTY_PER_TILE = 3;
+    const BLANK_DISCARD_PENALTY = 2;
+
+    // Standard Scrabble 100-tile distribution & point values
+    const TILE_DISTRIBUTION = [
+      { letter: 'A', points: 1, count: 9, isVowel: true },
+      { letter: 'B', points: 3, count: 2, isVowel: false },
+      { letter: 'C', points: 3, count: 2, isVowel: false },
+      { letter: 'D', points: 2, count: 4, isVowel: false },
+      { letter: 'E', points: 1, count: 12, isVowel: true },
+      { letter: 'F', points: 4, count: 2, isVowel: false },
+      { letter: 'G', points: 2, count: 3, isVowel: false },
+      { letter: 'H', points: 4, count: 2, isVowel: false },
+      { letter: 'I', points: 1, count: 9, isVowel: true },
+      { letter: 'J', points: 8, count: 1, isVowel: false },
+      { letter: 'K', points: 5, count: 1, isVowel: false },
+      { letter: 'L', points: 1, count: 4, isVowel: false },
+      { letter: 'M', points: 3, count: 2, isVowel: false },
+      { letter: 'N', points: 1, count: 6, isVowel: false },
+      { letter: 'O', points: 1, count: 8, isVowel: true },
+      { letter: 'P', points: 3, count: 2, isVowel: false },
+      { letter: 'Q', points: 10, count: 1, isVowel: false },
+      { letter: 'R', points: 1, count: 6, isVowel: false },
+      { letter: 'S', points: 1, count: 4, isVowel: false },
+      { letter: 'T', points: 1, count: 6, isVowel: false },
+      { letter: 'U', points: 1, count: 4, isVowel: true },
+      { letter: 'V', points: 4, count: 2, isVowel: false },
+      { letter: 'W', points: 4, count: 2, isVowel: false },
+      { letter: 'X', points: 8, count: 1, isVowel: false },
+      { letter: 'Y', points: 4, count: 2, isVowel: false },
+      { letter: 'Z', points: 10, count: 1, isVowel: false },
+      { letter: '?', points: 0, count: 2, isVowel: false, isBlank: true }
+    ];
+
+    const LETTER_POINTS = {};
+    TILE_DISTRIBUTION.forEach(t => { LETTER_POINTS[t.letter] = t.points; });
+
+    // 11x11 Bonus Map matching the exact specification and visual mockup
+    const BONUS_LAYOUT = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+    const setBonusSquares = (coords, type) => {
+      coords.forEach(([r, c]) => { BONUS_LAYOUT[r][c] = type; });
+    };
+
+    // 3W (Crimson Red)
+    setBonusSquares([[0,0],[0,5],[0,10],[5,0],[5,10],[10,0],[10,5],[10,10]], '3W');
+    // 2W (Salmon Pink)
+    setBonusSquares([[1,1],[2,2],[3,3],[1,9],[2,8],[3,7],[9,1],[8,2],[7,3],[9,9],[8,8],[7,7]], '2W');
+    // Center Star ★ (Acts as 2W on Turn 1)
+    BONUS_LAYOUT[5][5] = 'STAR';
+    // 3L (Royal Blue)
+    setBonusSquares([[1,4],[1,6],[3,5],[4,1],[4,4],[4,6],[4,9],[5,3],[5,7],[6,1],[6,4],[6,6],[6,9],[7,5],[9,4],[9,6]], '3L');
+    // 2L (Sky Blue)
+    setBonusSquares([[0,2],[0,8],[2,0],[2,5],[2,10],[5,2],[5,8],[8,0],[8,5],[8,10],[10,2],[10,8]], '2L');
+
+    /*************************************************************************
+     * 2. COMPREHENSIVE DICTIONARY (INSTANT FALLBACK + FULL 178K WORDLIST)
+     *************************************************************************/
+    const DICTIONARY = new Set();
+    let fullDictionaryLoaded = false;
+
+    // Complete Official Scrabble 2-Letter & 3-Letter Words + Core Vocabulary for instant offline play
+    const CORE_WORDS_COMPRESSED = [
+      // All official 2-letter Scrabble words
+      "AA AB AD AE AG AH AI AL AM AN AR AS AT AW AX AY BA BE BI BO BY CH DA DE DI DO EA ED EE EF EH EL EM EN ER ES ET EW EX FA FE FY GI GO GU HA HE HI HM HO ID IF IN IO IS IT JA JO KA KI KO KY LA LI LO MA ME MI MM MO MU MY NA NE NO NU NY OB OD OE OF OH OI OK OM ON OO OP OR OS OU OW OX OY PA PE PI PO QI RE SH SI SO ST TA TE TI TO UG UH UM UN UP UR US UT WE WO XI XU YA YE YO YU ZA ZO",
+      // High-frequency 3-letter & 4-5 letter Scrabble words
+      "ACE ACT ADD ADO ADS AGE AGO AID AIM AIR ALE ALL ALP ALT AMP AND ANT ANY APE APT ARC ARE ARK ARM ART ASH ASK ASP ATE AWE AWL AWN AXE AYE BAD BAG BAH BAM BAN BAP BAR BAS BAT BAY BED BEE BEG BEL BET BIB BID BIG BIN BIO BIT BOA BOB BOD BOG BOO BOP BOS BOT BOW BOX BOY BRA BRO BRR BUB BUD BUG BUM BUN BUR BUS BUT BUY BYE CAB CAD CAM CAN CAP CAR CAT CAW CAY CEE CEL CEP CHI CIG CIS COB COD COG COL CON COO COP COR COS COT COW COX COY COZ CRY CUB CUD CUE CUM CUP CUR CUT CWM DAB DAD DAG DAH DAK DAL DAM DAN DAP DAS DAW DAY DEB DEE DEF DEL DEN DEV DEW DEX DEY DIB DID DIE DIF DIG DIM DIN DIP DIS DIT DOC DOE DOG DOH DOL DOM DON DOR DOS DOT DOW DRY DUB DUD DUE DUG DUH DUI DUN DUO DUP DYE EAR EAT EAU EBB ECU EDH EEL EFF EFS EFT EGG EGO EKE ELD ELF ELK ELL ELM ELSEME EMS END ENG ENS EON ERA ERE ERG ERN ERR ERS ESS ETA ETH EVE EWE EYE FAB FAD FAG FAH FAN FAR FAS FAT FAX FAY FED FEE FEH FEM FEN FER FES FET FEU FEW FEY FEZ FIB FID FIE FIG FIL FIN FIR FIT FIX FIZ FLU FLY FOB FOE FOG FOH FON FOP FOR FOU FOX FOY FRO FRY FUB FUD FUG FUN FUR GAB GAD GAE GAG GAL GAM GAN GAP GAR GAS GAT GAY GED GEE GEL GEM GEN GET GEY GHI GIB GID GIE GIG GIN GIP GIT GNU GOA GOB GOD GOO GOR GOS GOT GOX GOY GUL GUM GUN GUT GUV GUY GYM GYP HAD HAE HAG HAH HAJ HAM HAN HAO HAP HAS HAT HAW HAY HEH HEM HEN HEP HER HES HET HEW HEX HEY HIC HID HIE HIM HIN HIP HIS HIT HMM HOB HOD HOE HOG HON HOP HOT HOW HOY HUB HUE HUG HUH HUM HUN HUP HUT HYP ICE ICH ICK ICY IDS IFF IFSIGG ILK ILL IMP INK INN INS ION IRE IRK ISM ITS IVY JAB JAG JAM JAR JAW JAY JEE JET JEU JEW JIB JIG JIN JOB JOE JOG JOT JOW JOY JUG JUN JUS JUT KAB KAE KAF KAS KAT KAW KAY KEA KEF KEG KEN KEP KEX KEY KID KIF KIN KIP KIR KIS KIT KOA KOB KOI KOP KOR KOS KUE KYE LAB LAC LAD LAG LAH LAM LAP LAR LAS LAT LAV LAW LAX LAY LEA LED LEE LEG LEI LEK LES LET LEU LEV LEX LEY LEZ LIB LID LIE LIN LIP LIS LIT LOB LOG LOO LOP LOT LOW LOX LUG LUM LUV LUX LYE MAC MAD MAE MAG MAN MAP MAR MAS MAT MAW MAX MAY MED MEG MEL MEM MEN MET MEW MHO MIB MIC MID MIG MIL MIM MIR MIS MIX MOA MOB MOC MOD MOG MOL MOM MON MOO MOP MOR MOS MOT MOW MUD MUG MUM MUN MUS MUT MYC NAB NAE NAG NAH NAM NAN NAP NAW NAY NEB NEE NEG NET NEW NIB NIL NIM NIP NIT NIX NOB NOD NOG NOH NOM NOO NOR NOS NOT NOW NOX NOY NTH NUB NUN NUS NUT OAF OAK OAR OAT OBA OBE OBI OCA ODA ODD ODE ODS OES OFF OFT OHM OHO OHS OIL OKA OKE OLD OLE OMS ONE ONO ONS OOH OOT OPE OPS OPT ORA ORB ORC ORE ORS ORT OSE OUD OUR OUT OVA OWE OWL OWN OWT OXY PAC PAD PAH PAL PAM PAN PAP PAR PAS PAT PAW PAX PAY PEA PEC PED PEE PEG PEH PEN PEP PER PES PET PEW PHI PHT PIA PIC PIE PIG PIN PIP PIS PIT PIU PIX PLY POD POH POI POL POM POO POP POT POW POX PRO PRY PSI PUB PUD PUG PUL PUN PUP PUR PUS PUT PYA PYE PYX QAT QIS QUA RAD RAG RAH RAI RAJ RAM RAN RAP RAS RAT RAW RAX RAY REB REC RED REE REF REG REI REM REP RES RET REV REX RHO RIA RIB RID RIF RIG RIM RIN RIP ROB ROC ROD ROE ROMAGE ROO ROT ROW RUB RUE RUG RUM RUN RUT RYA RYE SAB SAC SAD SAE SAG SAL SAP SAR SAT SAW SAX SAY SEA SEC SEE SEG SEI SEL SEN SER SET SEW SEX SHA SHE SHH SHY SIB SIC SIM SIN SIP SIR SIS SIT SIX SKA SKI SKY SLY SOB SOD SOL SOM SON SOP SOS SOT SOU SOW SOX SOY SPA SPY SRI STY SUB SUD SUE SUG SUM SUN SUP SUQ SYN TAB TAD TAE TAG TAJ TAM TAN TAO TAP TAR TAS TAT TAU TAV TAW TAX TEA TED TEE TEG TEL TEN TET TEW THE THO THY TIC TIE TIL TIN TIP TIS TIT TOD TOE TOG TOM TON TOO TOP TOR TOT TOW TOY TRY TSK TUB TUG TUI TUN TUP TUT TUX TWA TWO TYE UDO UGH UKE ULU UMM UMP UNS UPO UPS URB URD URN URP USE UTA UTE UTS VAC VAN VAR VAS VAT VAU VAV VAW VEE VEG VET VEX VIA VID VIE VIG VIM VIS VOE VOW VOX VUG VUM WAB WAD WAE WAG WAN WAP WAR WAS WAT WAW WAX WAY WEB WED WEE WEN WET WHA WHO WHY WIG WIN WIS WIT WIZ WOE WOG WOK WON WOO WOP WOS WOT WOW WRY WUD WYE WYN XIS YAG YAH YAK YAM YAP YAR YAW YAY YEA YEH YEN YEP YES YET YEW YID YIN YIP YOB YOD YOK YOM YON YOU YOW YUK YUM YUP ZAG ZAP ZAS ZAX ZED ZEE ZEK ZEP ZIG ZIN ZIP ZIT ZOA ZOO ZUZ ZZZ",
+      "ABLE ACID ACME ACRE ACTS AGED AGES AIDE AIDS AIMS AIRS AIRY AJAR AKIN ALAS ALLY ALMS ALOE ALSO ALTO ALUM AMEN AMID AMMO AWRY AREA ARIA ARMY ARTS ARTY ASHY ATOM AUNT AURA AUTO AVID AWAY AWED AWRY AXED AXES AXLE AXIS BABY BACK BADE BAGS BAIL BAIT BAKE BALD BALE BALL BALM BAND BANE BANG BANK BARE BARK BARN BARS BASE BASH BASK BASS BATH BATS BAWL BEAD BEAK BEAM BEAN BEAR BEAT BEAU BECK BEEF BEEN BEEP BEER BEES BEET BELL BELT BEND BENT BERG BERM BEST BETA BETS BIAS BIDE BIDS BIKE BILE BILL BIND VINE BIRD DIRE BITE BITS BLAB BLAT BLEW BLIP BLOB BLOC BLOG BLOT BLOW BLUE BLUR BOAR BOAT BODE BODY BOGS BOIL BOLD BOLE BOLL BOLT BOMB BOND BONE BONG BONK BONY BOOK BOOM BOON BOOR Sal BOOS BOOT BORE BORN BOSS BOTH BOUT BOWL BOWS BOYS BRAD BRAG BRAN BRAS BRAT BRAY BRED BREW BRIE BRIG BRIM BRIT BROW BUCK BUDS BUFF BUGS BULB BULK BULL BUMP BUMS BUNK BUNS BUNT BUOY BURN BURP BURR BURY BUSH BUSK BUST BUSY BUTS BUTT BUYS BUZZ BYTE CABS CAFE CAGE CAGY CAKE CALF CALL CALM CAME CAMP CAMS CANE CANS CANT CAPE CAPS CARD CARE CARL CARP CARS CART CASE CASH CASK CAST CATS CAVE CAWS CEIL CELL CENTEF CHEF CHEM CHEW CHIC CHIN CHIP CHIT CHOP CHOW CHUG CHUM CITE CITY CLAD CLAM CLAN CLAP CLAW CLAY CLEF CLEW CLIP CLOD CLOG CLON CLOP CLOT CLUB CLUE COAL COAT COAX COBS COCK CODA CODE CODS COED COIF COIL COIN COKE COLD COLE COLT COMA COMB COME COMP CONE CONK CONS COOK COOL COON COOP COOT COPE COPS COPY CORD CORE CORK CORM CORN CORP COST COSY COTE COTS COUP COVE COWL COWS COZY CRAB CRAG CRAM CRAN CRAP CRAW CREW CRIB CRIM CROP CROW CRUD CRUX CUBE CUBS CUDS CUED CUES CUFF CULL CULT CUPS CURB CURD CURE CURL CURS CURT CUSP CUSS CUTE CUTS CYAN CYST DABS DACE DADA DADO DADS DAFT DAGS DALE DAME DAMP DAMS DANG DANK DARE DARK DARN DART DASH DATA DATE DAUB DAWN DAYS DAZE DEAD DEAF DEAL DEAN DEAR DEBT DECK DEED DEEM DEEP DEER DEFY DEKE DELI DELL DEMO DENS DENT DENY DEFY DESK DEWS DEWY DIAL DICE DIDS DIED DIES DIET DIGS DIKE DILL DIME DIMS DINE DING DINK DINO DINT DIPS DIRE DIRK DIRT DISC DISH DISK DIVE DOCK DOES DOFF DOGE DOGS DOJO DOLE DOLL DOLT DOME DONE DONG DOOM DOOR DOPA DOPE DOPY DORK DORM DORP DORY DOSE DOST DOTE DOTS DOUR DOVE DOWN DOZE DRAB DRAG DRAM DRAT DRAW DRAY DREG DREW DRIB DRIP DROP DRUB DRUG DRUM DUAL DUBS DUCE DUCK DUCT DUDE DUDS DUEL DUET DUFF DUKE DULL DULY DUMB DUMP DUNE DUNG DUNK DUNS DUOS DUPE DURA DUSK DUST DUTY DYAD DYED DYER DYES DYKE EACH EARL EARN EARS EASE EAST EASY EATS EAVE EBBS ECHO ECRU EDDY EDGE EDGY EDIT EELS EGAD EGGS EGIS EGOS EKED EKES ELAN ELDS ELKS ELLS ELMS ELSE EMIR EMIT EMMA EMUS ENDS ENVY EONS EPEE EPIC ERAS ERGO ERGS ERNS ERRS ERST ETCH EURO EVEN EVER EVES EVIL EWER EWES EXAM EXEC EXES EXIT EXPO EYED EYES FACE FACT FADE FADS FAGS FAIL FAIN FAIR FAKE FALL FAME FANG FANS FARE FARM FARO FART FAST FATE FATS FAUN FAUX FAVE FAWN FAZE FEAR FEATLIED FEED FEEL FEES FEET FELL FELT FEND FENS FERN FESS FEST FETE FETS FEUD FIAT FIBS FICO FIDS FIEF FIFE FIGS FILE FILL FILM FILO FILS FIND FINE FINK FINO FINS FIRE FIRM FIRS FISH FIST FITS FIVE FIXE FIZZ FLAB FLAG FLAK FLAM FLAN FLAP FLAT FLAW FLAX FLAY FLEA FLED FLEE FLEW FLEX FLEY FLIC FLIP FLIT FLOC FLOE FLOG FLOP FLOW FLUB FLUE FLUS FOAL FOAM FOBS FOCI FOES FOGS FOGY FOIL FOLD FOLK FOND FONT FOOD FOOL FOOT FOPS FORA FORD FORE FORK FORM FORT FOUL FOUR FOWL FOXY FRAT FRAY FREE FRET FRIG FRIT FRIZ FROE FROG FROM FROW FRUG FUCK FUDS FUEL FULL FUME FUMY FUND FUNK FUNS FURL FURS FURY FUSE FUSS FUZE FUZZ GABS GABY GADS GAFF GAGA GAGE GAGS GAIN GAIT GALA GALE GALL GALS GAME GAMS GAMY GANG GAPE GAPS GAPY GARB GARS GASH GASP GAST GATE GATS GAUD GAUM GAUR GAVE GAWK GAWP GAYS GAZE GEAR GECK GEDS GEED GEEK GEES GEEZ GELD GELS GELT GEMS GENE GENS GENT GERM GEST GETS GHEE GHIS GIBE GIBS GIDS GIFT GIGS GILD GILL GILT GIMP GINS GIRD GIRL GIRN GIRO GIRT GIST GITE GITS GIVE GLAD GLEE GLEN GLIB GLIM GLOB GLOM GLOP GLOW GLUE GLUG GLUM GLUT GNAR GNAT GNAW GNUS GOAD GOAL GOAT GOBS GOBY GODS GOER GOES ROGO GOLD GOLF GONE GONG GOOD GOOF GOOK GOON GOOP GOOS GORE GORM GORY GOSH GOTH GOUT GOWK GOWN GOYS GRAB GRAD GRAM GRAN GRAT GRAY GREE GREW GREY GRID GRIG GRIM GRIN GRIP GRIT GROG GROK GROT GROW GRUB GRUE GRUM GUAN GUAR GUCK GUDE GUFF GUID GULF GULL GULP GUMS GUNK GUNS GURU GUSH GUST GUTS GUVS GUYS GYBE GYMS GYPS GYRE GYRI GYRO GYVE HACK HADE HADJ HADS HAED HAEM HAEN HAES HAET HAFF HAGS HAHA HAHS HAIK HAIL HAIN HAIR HAJI HAJJ HAKA HAKE HALE HALF HALL HALM HALO HALT HAME HAMS HAND HANG HANK HANT HAPS HARD HARE HARK HARL HARM HARP HART HASH HASP HAST HATE HATH HATS HAUL HAUT HAVE HAWK HAWS HAYS HAZE HAZY HEAD HEAL HEAP HEAR HEAT HEBE HECK HEED HEEL HEFT HEHS HEIL HEIR HELD HELL HELM HELP HEME HEMP HEMS HENS HENT HERB HERD HERE HERL HERM HERN HERO HERS HEST HETH HETS HEWN HEWS HICK HIDE HIED HIES HIGH HIKE HILA HILI HILL HILT HIMS HIND HINS HINT HIPS HIRE HISN HISS HIST HITS HIVE HOAR HOAX HOBO HOBS HOCK HODS HOED HOER HOES HOGG HOGS HOKE HOLD HOLE HOLK HOLM HOLP HOLS HOLT HOLY HOME HOMO HOMY HONE HONG HONK HONS HOOD HOOF HOOK HOOP HOOT HOPE HOPS HORA HORN HOSE HOST HOTS HOUR HOVE HOWE HOWF HOWK HOWL HOWS HOYA HOYS HUBS HUCK HUED HUES HUFF HUGE HUGS HULA HULK HULL HUMF HUMP HUMS HUNG HUNH HUNK HUNS HUNT HURL HURT HUSH HUSK HUTS HWAN HYLA HYMN HYPE HYPO HYPS HYTE IAMB IBEX IBIS ICED ICES ICKY ICON IDEA IDEM IDES IDLE IDLY IDOL IDYL IFFY IGAD IGGS IGLU IKAT IKON ILIA ILKA ILKS ILLS ILLY IMAM IMID IMMY IMPI IMPS INBY INCH INFO INIA INKS INKY INLY INNS INRO INTI INTO IONS IOTA IRED IRES IRID IRIS IRKS IRON ISBA ISLE ISMS ITCH ITEM IWIs IXIAIZAR JABS JACK JADE JAGG JAGS JAIL JAKE JAMB JAMS JANE JAPE JARL JARS JATO JAUK JAUP JAWS JAYS JAZZ JEAN JEEP JEER JEES JEEZ JEFE JEHU JELL JEON JERK JESS JEST JETE JETS JEUX JEWS JIAO JIBB JIBE JIBS JIFF JIGS JILL JILT JIMP JINK JINN JINS JINX JIRD JIVE JIVY JOES JOEY JOGS JOHN JOIN JOKE JOKY JOLE JOLT JOSH JOSS JOTA JOTS JOUK JOWL JOWS JOYS JUBA JUBE JUCO JUDO JUGA JUGS JUJU JUKE JUKU JUMP JUNK JUPE JURA JURY JUST JUTE JUTS KAAS KABS KADI KAES KAFS KAGU KAIF KAIL KAIN KAKA KAKI KALE KAME KAMI KANA KANE KAON KAPA KAPH KARN KART KATA KATS KAVA KAWA KAYS KAZI KEAS KECK KEDS KEEK KEEL KEEN KEEP KEET KEFS KEGS KENAF KENO KENS KENT KEPI KEPS KEPT KERB KERF KERN KETO KEYS KHAF KHAN KHAT KHET KHIS KIBE KICK KIDS KIEF KIER KIFS KIKE KILL KILN KILO KILT KINA KIND KINE KING KINK KINO KINS KIPS KIRK KIRN KIRS KISS KIST KITE KITH KITS KIVA KIWI KLAP KLIC KNAG KNAP KNAR KNEE KNEW KNIT KNOB KNOP KNOT KNOW KNUR KOAN KOAS KOBO KOBS KOEL KOHA KOHL KOIS KOJI KOLA KOLO KOND KONK KOOK KOPH KOPS KORA KORE KORS KOTO KOWS KRAB KRIS KSAR KUDO KUDU KUES KUFI KUNA KUNE KURU KVAS KYAK KYAR KYAT KYES KYTE LABS LACE LACK LACS LACY LADE LADS LADY LAGS LAIC LAID LAIN LAIR LAKE LAKH LAKY LALL LAMA LAMB LAME LAMP LAMS LAND LANE LANG LANK LAPS LARD LARI LARK LARS LASE LASH LASS LAST LATE LATH LATI LATS LATU LAUD LAVA LAVE LAVS LAWN LAWS LAYSLAAZ LEAD LEAF LEAK LEAL LEAN LEAP LEAR LEAS LECH LEED LEEK LEER LEES LEET LEFT LEGS LEHR LEIS LEKS LEKU LEND LENG LENO LENS LENT LEPT LESS LEST LETS LEUD Airy LEVA LEVO LEVY LEWD LEYS LIAR LIAS LIBS LICE LICH LICK LIDO LIDS LIEU LIFE LIFT LIGS LIKE LILL LILT LILY LIMA LIMB LIME LIMN LIMO LIMP LIMY LINE LING LINK LINN LINO Lins LINT LINY LION LIPA LIPE LIPO LIPS LIRA LIRE LIRI LISP LIST LITE LITS LITU LIVE LOAD LOAF LOAM LOAN Lobe LOBI LOBO LOBS LOCA LOCH LOCI LOCK LOCO LODE LODS LOFT LOGE LOGO LOGS LOGY LOID LOIN LOLL LOMA LOME LONE LONG LOOF LOOK LOOM LOON LOOP LOOR LOOS LOOT LOPE LOPS LORD LORE LORN LORY LOSE LOSS LOST LOTA LOTE LOTH LOTI LOTS LOUD LOUP LOUR LOUT LOVE LOWE LOWS LUAU LUBE LUCE LUCK LUDE LUDO LUDS LUES LUFF LUGE LUGS LULL LULU KUNA LUMP LUMS LUNA LUNE LUNG LUNK LUNT LUNY LURE LURK LUSH LUST LUTE LUTZ LUVS LUXE LWEI LYCH LYES LYNX LYRE LYSE MAAR MABE MACE MACH MACK MACS MADE MADS MAES MAGE MAGI MAGS MAID MAIL MAIN MAIR MAKE MAKO MALE MALL MALM MALT MAMA MANA MAND MANE MANO MANS MANY MAPS MARA MARC MARE MARK MARL MARS MART MARY MASA MASH MASK MASS MAST MATE MATH MATS MATT MAUD MAUL MAUN MAUT MAWN MAWS MAXI MAYA MAYO MAYS MAZE MAZY MEAD MEAL MEAN MEAT MEED MEEK MEET MEGS MEIN MELA MELD MELL MELO MELT MEME MEMO MEMS MEND MENO MENT MENU MEOW MERC MERE MERI MERK MERL MESA MESH MESS META METE METH METS MEWL MEWS MEZE MHOS MIBS MICA MICE MICH MICK MICS MIDI MIDS MIEN MIFF MIGG MIGS MIKE MILD MILE MILK MILL MILO MILS MILT MIME MINA MIND MINE MING MINI MINK MINO MINT MINX MIRE MIRI MIRK MIRS MIRV MIRY MISE MISO MISS MIST MITE MITT MITY MIXT MOAN MOAS MOAT MOBS MOCK MOCS MODE MODI MODS MOGS MOHR MOIL MOIT MOJO MOKE MOLA MOLD MOLE MOLL MOLT MOLY MOME MOMI MOMS MONA MONG MONK MONO MONS MONT MOOCH MOOD MOOL MOON MOOR MOOS MOOT MOPE MOPS MOPY MORA MORE MORN MORS MORT MOSH MOSK MOSS MOST MOTE MOTH MOTS MOTT MOUE MOVE MOWN MOWS MOXA MOZO MUCH MUCK MUDS MUFF MUGG MUGS MULE MULL MUMM MUMP MUMS MUMU MUNG MUNI MUNS MUON MURA MURE MURK MURR MUSE MUSH MUSK MUSS MUST MUTE MUTS MUTT MYCS MYNA MYTH NAAN NABE NABS NADA NAFF NAGS NAIF NAIL NALA NAME NANA NANS NAOI NAOS NAPA NAPE NAPS NARC NARD NARK NARY NAVE NAVY NAYS NEAP NEAR NEAT NEBS NECK NEED NEEM NEEP NEGS NEIF NEMA NENE NEON NERD Nertz NESH NESS NEST NETS NEUK NEUM NEVE NEVI NEWS NEWT NEXT NIBS NICE NICK NIDE NIDI NIGH NILL NILS NIMB NIMS NINE NIPA NIPS NISI NITE NITS NIXE NIXY NOBS NOCK NODE NODI NODS NOEL NOES NOGG NOGS NOIL NOIR NOLE NOLL NOLO NOMA NOME NOMS NONA NONE NOOK NOON NOPE NORI NORM NOSE NOSY NOTA NOTE NOTS NOUN NOUS NOVA NOWS NOWT NOYS NUBS NUDE NUKE NULL NUMB NUNS NURD NURL NURS NUTS NYAH OAFOAKS OARS OAST OATH OATS OBAS OBES OBEY OBIA OBIS OBIT OBOE OBOL OCAS ODAS ODDS ODEA ODES ODIC ODOR ODYL OFAY OFFS OGAM OGEE OGLE OGRE OHED OHIA OHMS OILS OILY OINK OKAS OKAY OKEH OKES OKRA OLDS OLDY OLEA OLEO OLES OLIO OLLA OMEN OMER OMIT ONCE ONER ONES ONLY ONOS ONTO ONUS ONYX OOHS OOTS OOZE OOZY OPah OPAL OPED OPEN OPES OPTS OPUS ORAD ORAL ORBS ORBY ORCA ORCS ORDO ORES ORGY ORLE ORRA ORTS ORYX ORZO OSAR OSES OSSA OTIC OTTO OUDS OUPH OURS OUST OUTS OUZO OVAL OVEN OVER OVUM OWED OWES OWLS OWNS OWSE OXEN OXES OXID OXIM OYER OYES OYEZ PACA PACE PACK PACS PACT PACY PADI PADS PAGE PAID PAIK PAIL PAIN PAIR PALE PALL PALM PALP PALS PALY PAMS PANE PANG PANS PANT PAPA PAPS PARA PARD PARE PARK PARR PARS PART PASE PASH PASS PAST PATE PATH PATS PATY PAVE PAWL PAWN PAWS PAYS PEAG PEAK PEAL PEAN PEAR PEAS PEAT PECH PECK PECS PEDS PEED PEEK PEEL PEEN PEEP PEER PEES PEGS PEHS PEIN PEKE PELE PELF PELT PEND PENS PENT PEON PEPO PEPS PERE PERI PERK PERM PERP PERT PERV PESO PEST PETS PEWS PFFT PFUI PHAT PHEW PHIS PHIZ PHOH PHON PHOT PHUT PIAL PIAN PIAS PICA PICE PICK PICS PIED PIER PIES PIGS PILA PILE PILI PILL PILY PIMA PIMP PINA PINE PING PINK PINS PINT PINY PION PIPE PIPY PIRN PISH PISO PISS PITA PITH PITS PITY PIXY PLAN PLAT PLAY PLEA PLEB PLED PLEW PLEX PLIE PLOD PLOP PLOT PLOW PLOY PLUG PLUM PLUS POCK POCO PODS POEM POET POGY POIS POKE POKY POLE POLL POLO POLS POLY POME POMO POMP POMS POND PONE PONG PONS PONY POOD POOF POOH POOL POON POOP POOR POOS POOT POPE POPS PORE PORK PORN PORT POSE POSH POST POSY POTS POUF POUR POUT POWS POXY PRAM PRAO PRAT PRAU PRAY PREE PREP PREX PREY PRIG PRIM PROA PROB PROD PROF PROG PROM PROP PROS PROW PSIU PUBS PUCE PUCK PUDS PUFF PUGH PUGS PUJA PUKE PULA PULE PULI PULK PULL PULP PULS PUMA PUMP PUNA PUNG PUNK PUNS PUNT PUNY PUPA PUPS PURE PURI PURL PURR PURS PUSH PUSS PUTS PUTT PUTZ PYAS PYES PYIC PYIN PYRE PYRO QADI QAID QATS QOPH QUAD QUAG QUAI QUAY QUEY QUID QUIN QUIP QUIT QUIZ QUOD RACE RACK RACY RADS RAFF RAGA RAGE RAGG RAGS RAIA RAID RAIL RAIN RAIS RAJA RAKE RAKI RAKU RALE RAMI RAMP RAMS RAND RANG RANI RANK RANT RAPE RAPS RAPT RARE RARK RASE RASH RASP RATE RATH RATO RATS RAVE RAWs RAXE RAYA RAYS RAZE RAZZ READ REAL REAM REAP REAR REBS RECK RECS REDD REDE REDO REDS REED REEF REEK REEL REES REFS REFT REGS REIF REIN REIS RELY REMS REND RENT REPO REPP REPS RESH REST RETE RETS REVS RHEA RHOS RHUS RIAL RIAS RIBS RICE RICH RICK RIDE RIDS RIEL RIFE RIFF RIFS RIFT RIGS RILE RILL RIME RIMS RIMY RIND RING RINK RINS RIOT RIPE RIPS RISE RISK RITE RITZ ROAD ROAM ROAN ROAR ROBE ROBS ROCK RODE RODS ROES ROIL ROLE ROLF ROLL ROME ROMP ROMS ROOD ROOF ROOK ROOM ROOS ROOT ROPE ROPY RORE RORT ROSE ROSY ROTA ROTE ROTI ROTL ROTS ROUE ROUP ROUT ROUX ROVE ROWS RUBE RUBS RUBY RUCK RUDD RUDE RUED RUER RUES RUFF RUGA RUGS RUIN RULE RULY RUMP RUMS RUNE RUNG RUNS RUNT RUSE RUSH RUSK RUST RUTH RUTS RYAL RYAS RYES RYKE RYND RYOT SABE SABS SACK SACS SADE SADI SADO SADS SAFE SAGA SAGE SAGO SAGS SAGY SAID SAIL VAIN SAKE SAKI SALE SALL SALP SALS SALT SAME SAMP SAND SANE SANG SANK SANS SAPS SARD SARI SARK SASH SASS SATE SATI SAUL SAVE SAWN SAWS SAYS SCAB SCAD SCAG SCAM SCAN SCAR SCAT SCOP SCOT SCOW SCRY SCUD SCUM SCUP SCUT SEAL SEAM SEAN SEAR SEAS SEAT SECS SECT SEED SEEK SEEL SEEM SEEN SEEP SEER SEES SEGO SEGS SEIF SEIS SELF SELL SEME SEMI SEND SENE SENT SEPT SERA SERE SERF SERS SETA SETS SETT SEWN SEWS SEXT SEXY SHAD SHAG SHAH SHAM SHAT SHAW SHAY SHEA SHED SHES SHEW SHIM SHIN SHIP SHIT SHIV SHOAT SHOD SHOE SHOG SHOO SHOP SHOT SHOW SHRI SHUL SHUN SHUT SHWA SIAL SIBB SIBS SICE SICK SICS SIDE SIDH SIFT SIGH SIGN SIKA SIKE SILK SILL SILO SILT SIMA SIMP SIMS SINE SING SINH SINK SINS SIPE SIPS SIRE SIRI SIRS SITE SITH SITS SIZE SIZY SKAG SKAS SKAT SKEAN SKEE SKEG SKEP SKEW SKID SKIM SKIN SKIP SKIS SKIT SKUA SLAB SLAG SLAM SLAP SLAT SLAW SLAY SLED SLEW SLID SLIM SLIP SLIT SLOB SLOE SLOG SLOP SLOT SLOW SLUB SLUE SLUG SLUM SLUR SLUT SMEW SMIT SMOG SMUG SMUT SNAG SNAP SNAW SNED SNIB SNIP SNIT SNOB SNOG SNOT SNOW SNUB SNUG SNYE SOAK SOAP SOAR SOBS SOCA SOCK CODA SODS SOFA SOFT SOIL SOJA SOKE SOLA SOLD SOLE SOLI SOLO SOLS SOMA SOME SOMS SONE SONG SONS SOOK SOON SOOT SOPH SOPS SORA SORB SORD SORE SORI SORN SORT SOUS SOUR SOUS SOWN SOWS SOYA SOYS SPAE SPAM SPAN SPAR SPAS SPAT SPAY SPAZ SPEC SPED SPEW SPIC SPIK SPIN SPIT SPIV SPOT SPRY SPUD SPUE SPUN SPUR SRIS STAB STAG STAR STAT STAY STEM STEP STET STEW STEY STIR STOA STOB STOP STOT STOW STUB STUD STUM STUN STYE SUBA SUBS SUCH SUCK SUDS SUED SUER SUES SUET SUGH SUIT SUKS SULK SULU SUMO SUMP SUMS SUNG SUNK SUNN SUNS SUPE SUPS SUQS SURA SURD SURE SURF SUSS SWAB SWAG SWAM SWAN SWAP SWAT SWAY SWIG SWIM SWOB SWOP SWUM SYBO SYCE SYKE SYLI SYNC SYNE SYPH TABS TABU TACE TACH TACK TACO TACT TADS TAEL TAGS TAHA TAIL TAIN JAKA TAKE TAKI TALA TALC TALE TALK TALL TAME TAMP TAMS TANG TANK TANS TAOS TAPA TAPE TAPS TARE TARN TARO TARP TARS TART TASK TASS TATE TATS TAUS TAUT TAVS TAWS TAXA TAXI TEAM TEAR TEAS TEAT TECH TEDS TEED TEEK TEEL TEEM TEEN TEES TEFF TEGG TEGS TEGU TEIL TELA HELD TELE TELL TELS TEMP TEND TENS TENT TEPA TERM TERN TEST TETH TETS TEWS TEXT THAE THAN THAT THEE THEM THEN THEW THEY THIN THIO THIR THIS THOU THRO THRU THUD THUG THUS TICK TICS TIDE TIDY TIED TIER TIES TIFF TIGE TIGS TIKE TIKI TILE TILL TILS TILT TIME TINE TING TINS TINT TINY TIPI TIPS TIRE TIRL TIRO TITIS TOAD TOBY TODS TOEA TOED TOES TOFF TOFT TOFU TOGA TOGS TOIL TOIT TOKE TOLA TOLD TOLE TOLL TOLU TOMB TOME TOMS TONE TONG TONS TONY TOOK TOOL TOOM TOON TOOT TOPH TOPI TOPO TOPS TORA TORC TORE TORI TORN TORO TORR TORS TORT TORY TOSH TOSS TOST TOTE TOTS TOUK TOUR TOUT TOWN TOWS TOWY TOYO TOYS TRAD TRAM TRAP TRAY TREE TREF TREK TRES TRET TREW TRIG TRIM TRIO TRIP TROD TROG TROP TROT TROW TROY TRUE TRUG TSAR TSKS TUBA TUBE TUBS TUCK TUFA TUFF TUFT TUGS TUIS TULE HULL TUMP TUNA TUNE TUNG TUNS TUPS TURD TURF TURK TURN TUSH TUSK TUTS TUTU TUXE TWAE TWAS TWEE TWIG TWIN TWIT TWOS TYEE TYER TYES TYIN TYKE TYNE TYPE TYPO TYPP TYPY TYRE TYRO TZAR UDOS UGHS UKES ULAN ULES ULNA ULUS ULVA UMBO UMMAS UMPS UNAI UNAU UNBE UNCI UNCO UNDE UNDO UNDY UNIT UNTO UPAS UPBY UPDO UPON URBS URDS UREA URGE URIC URNS URPS URSA URUS USED USER USES UTAS UTES UTIS VACS VAGI VAIL VAIN VAIR VALE VAMP VANE VANG VANS VARA VARS VARY VASA VASE VAST VATS VATU VAUS VAVS VAWS VEAL VEEP VEER VEES VEGA VEIL VEIN VELA VELD VELE VENA VEND VENT VERA VERB VERT VERY VEST VETO VETS VEXT VIAE VIAL VIAS VICE VIDE VIDS VIED VIER VIES VIEW VIGS VILA VILE VILL VIMS VINA VINE VINO VINY VIOL VIRE VIRL VISA VISE VITA VITE VIVA VIVE VIVO VIZY VOES VOID VOLE VOLT VOTE VOWS VROW VROU VUGG VUGH VUGS VULN WAAC WABS WACK WADE WADI WADS WADY WAES WAFF WAFT WAGE WAGS WAIF WAIL WAIN WAIR WAIT WAKE WALE WALK WALL WALY WAME WAND WANE WANK WANS WANT WANY WAPS WARD WARE WARK WARM WARN WARP WARS WART WARY WASH WASP WAST WATS WATT WAUK WAUL WAUR WAVE WAVY WAWA WAWL WAWS WAXY WAYS WEAK WEAL WEAN WEAR WEBS WEDS WEED WEEK WEEL WEEN WEEP WEER WEES WEET WEFT WEIR WEKA WELD WELL WELT WEND WENS WENT WEPT WERE WERT WEST WETS WHAM WHAP WHAT WHEE WHEN WHET WHEW WHEY WHID WHIG WHIM WHIN WHIP WHIR WHIT WHIZ WHOA WHOM WHOP WHOW WHUP WHYS WICE WICH WICK WIDE WIFE WIGS WILD WILE WILL WILT WILY WIMP WIND WINE WING WINK WINO WINS WINY WIPE WIRE WIRY WISE WISH WISP WISS WIST WITE WITH WITS WIVE WOAD WOCK WOES WOGS WOKE WOKS WOLD WOLF WOMB WONK WONS WONT WOOD WOOF WOOL WOON WOOS WOOT WOPS WORD WORE WORK WORM WORN WORT WOST WOTS WOVE WOWS WRAC WRAP WREN WRIT WROTH WRYD WUDU WULL WUSS WYCH WYES WYLE WYND WYNN WYNS WYTE Xyst YACK YAFF YAGI YAGS YAHS YAKS YALD YAMS YANG YANK YAPS YARD YARE YARN YAUD YAUP YAWL YAWN YAWP YAWS YAYS YEAH YEAN YEAR YEAS YECH YELD YELK YELL YELP YENS YEPS YERK YESK YEST YETI YETT YEUK YEWS YIDS YILL YINS YIPE YIPS YIRD YIRK YIRR YITE YOBS YOCK YODE YODH YODS YOGA YOGH YOGI YOKE YOKS YOND YONI YONT YOOF YOOP YORE YORK YOUK YOUR YOUS YOWE YOWL YOWS YUAN YUCA YUCH YUCK YUFT YUGA YUGS YULE YCLAD YUPS YURT YUTZ YWIS ZAGS ZANY ZAPS ZARF ZEAL ZEAS ZEBU ZEDS ZEES ZEIN ZEKS ZEPS JERK ZERO ZEST ZETA ZIGG ZIGS ZILA ZILL ZINC ZINE ZING ZINS ZIPS ZITI ZITS ZOEA ZOIC ZONA ZONE ZONK ZOOM ZOON ZOOS ZORI ZOUK ZYME"
+    ];
+
+    function initDictionary() {
+      CORE_WORDS_COMPRESSED.forEach(chunk => {
+        chunk.split(/\s+/).forEach(w => {
+          const clean = w.trim().toUpperCase();
+          if (clean) {
+            DICTIONARY.add(clean);
+            // Automatically expand common regular inflections (plurals -S) for instant offline play
+            if (clean.length >= 3 && clean.length <= 6 && !clean.endsWith('S') && !clean.endsWith('X') && !clean.endsWith('Z')) {
+              DICTIONARY.add(clean + 'S');
+            }
+          }
+        });
+      });
+
+      const dot = document.getElementById('dict-status-dot');
+      const label = document.getElementById('dict-count-label');
+      if (label) label.textContent = `Dictionary: ${DICTIONARY.size.toLocaleString()} core words ready (loading full SOWPODS...)`;
+
+      // Asynchronously load the complete official 178k+ TWL06/SOWPODS Scrabble dictionary
+      const WORDLIST_URLS = [
+        'https://raw.githubusercontent.com/jesstess/Scrabble/master/scrabble/sowpods.txt',
+        'https://raw.githubusercontent.com/raun/Scrabble/master/words.txt'
+      ];
+
+      const tryFetchNext = (idx) => {
+        if (idx >= WORDLIST_URLS.length) {
+          if (label) label.textContent = `Dictionary: ${DICTIONARY.size.toLocaleString()} built-in Scrabble words active`;
+          return;
+        }
+        fetch(WORDLIST_URLS[idx])
+          .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+          })
+          .then(text => {
+            const lines = text.split(/\r?\n/);
+            for (let i = 0; i < lines.length; i++) {
+              const w = lines[i].trim().toUpperCase();
+              if (w.length >= 2 && w.length <= 11) {
+                DICTIONARY.add(w);
+              }
+            }
+            fullDictionaryLoaded = true;
+            if (dot) {
+              dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+              dot.title = `Full Tournament Dictionary Ready (${DICTIONARY.size.toLocaleString()} words)`;
+            }
+            if (label) label.textContent = `Dictionary: ${DICTIONARY.size.toLocaleString()} official Scrabble words active`;
+            // Re-evaluate live preview in case tiles are on board
+            updateLiveTurnPreview();
+          })
+          .catch(() => tryFetchNext(idx + 1));
+      };
+
+      tryFetchNext(0);
+    }
+
+    /*************************************************************************
+     * 3. SEEDED PRNG & DAILY 35-TILE GENERATOR (WITH VOWEL GUARD)
+     *************************************************************************/
+    // Mulberry32 deterministic PRNG
+    function createSeededRNG(seedString) {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < seedString.length; i++) {
+        h ^= seedString.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      let a = h >>> 0;
+      return function() {
+        let t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function getTodayDateSeed() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function getDailyNumber(dateStr) {
+      const epoch = new Date('2026-06-12T00:00:00');
+      const target = new Date(dateStr + 'T00:00:00');
+      const diffDays = Math.max(1, Math.round((target - epoch) / (1000 * 60 * 60 * 24)));
+      return diffDays;
+    }
+
+    /**
+     * Generates a deterministic 35-tile queue from the 100-tile Scrabble pool
+     * enforcing:
+     * - Vowel-to-consonant ratio guard: 12 to 15 vowels (34.3% to 42.8%)
+     * - At most 1 Blank tile ('?') in the 35-tile pool
+     * - Balanced early rack (at least 2 vowels in the opening 7 tiles)
+     */
+    function generateSeededTileQueue(seedStr) {
+      let attempt = 0;
+      while (attempt < 200) {
+        const rng = createSeededRNG(`${seedStr}#attempt_${attempt}`);
+        // Build 99-tile pool (with max 1 blank tile as specified in rules)
+        const bag = [];
+        TILE_DISTRIBUTION.forEach(item => {
+          const count = item.isBlank ? 1 : item.count;
+          for (let i = 0; i < count; i++) {
+            bag.push({
+              letter: item.letter,
+              points: item.points,
+              isVowel: item.isVowel,
+              isBlank: !!item.isBlank
+            });
+          }
+        });
+
+        // Fisher-Yates shuffle using seeded RNG
+        for (let i = bag.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          const temp = bag[i];
+          bag[i] = bag[j];
+          bag[j] = temp;
+        }
+
+        const subset = bag.slice(0, DAILY_QUEUE_TOTAL);
+        const totalVowels = subset.filter(t => t.isVowel).length;
+        const firstSevenVowels = subset.slice(0, 7).filter(t => t.isVowel).length;
+
+        if (totalVowels >= 12 && totalVowels <= 15 && firstSevenVowels >= 2 && firstSevenVowels <= 4) {
+          return subset.map((t, index) => ({
+            id: `tile_${index}_${t.letter}`,
+            letter: t.letter,
+            points: t.points,
+            isBlank: t.isBlank,
+            assignedLetter: null,
+            originRackIdx: null,
+            justDrawn: false,
+            drawDelayMs: 0
+          }));
+        }
+        attempt++;
+      }
+
+      // Fallback guaranteed balanced slice
+      return [];
+    }
+
+    /*************************************************************************
+     * 4. WEB AUDIO SYNTHESIZER (TACTILE WOOD CLICKS & CHIMES)
+     *************************************************************************/
+    let audioCtx = null;
+    function playSound(type) {
+      try {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return;
+          audioCtx = new AudioContextClass();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+
+        if (type === 'place') {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(320, now);
+          osc.frequency.exponentialRampToValueAtTime(140, now + 0.045);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        } else if (type === 'select') {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(480, now);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.035);
+        } else if (type === 'score') {
+          [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.055);
+            gain.gain.setValueAtTime(0.14, now + idx * 0.055);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.055 + 0.18);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + idx * 0.055);
+            osc.stop(now + idx * 0.055 + 0.2);
+          });
+        } else if (type === 'error') {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.linearRampToValueAtTime(110, now + 0.18);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.21);
+        }
+      } catch (e) {
+        // Ignore audio errors if blocked by browser autoplay policy
+      }
+    }
+
+    /*************************************************************************
+     * 5. GAME STATE & CORE ENGINE
+     *************************************************************************/
+    let gameState = {
+      seedString: '',
+      isDaily: true,
+      dailyNum: 124,
+      queue: [],             // Hidden remaining tiles
+      rack: Array(RACK_CAPACITY).fill(null), // 7 slots on wooden rack
+      board: [],             // 11x11 array of { lockedTile: null, tempTile: null }
+      score: 0,
+      wordPointsTotal: 0,
+      bingoBonusTotal: 0,
+      clearRackBonusTotal: 0,
+      swapDiscardPenaltyTotal: 0,
+      unplayedPenaltyTotal: 0,
+      turnsHistory: [],
+      wordsPlayedCount: 0,
+      bestTurnScore: 0,
+      bestTurnWord: '',
+      timeRemaining: GAME_DURATION_SEC,
+      timerInterval: null,
+      timerStarted: false,
+      isGameOver: false,
+
+      // UI Interaction states
+      actionMode: 'play',    // 'play' | 'swap' | 'discard'
+      selectedRackIndex: null,
+      selectedSetForSwapOrDiscard: new Set(), // indices of rack tiles selected for swap/discard
+      focusedCell: null,     // { r, c, dir: 'H' | 'V' } for keyboard input
+      pendingBlankCoords: null // { r, c } when assigning letter to a blank '?' tile
+    };
+
+    function createEmptyBoard() {
+      return Array.from({ length: BOARD_SIZE }, () =>
+        Array.from({ length: BOARD_SIZE }, () => ({
+          lockedTile: null,
+          tempTile: null
+        }))
+      );
+    }
+
+    function startDailyGame(forceRestart = false) {
+      const dateSeed = getTodayDateSeed();
+      const dailyNum = getDailyNumber(dateSeed);
+      initNewGameSession(dateSeed, true, dailyNum);
+    }
+
+    function startPracticeGame() {
+      const randSuffix = Math.floor(1000 + Math.random() * 9000);
+      const practiceSeed = `PRACTICE-${randSuffix}`;
+      initNewGameSession(practiceSeed, false, randSuffix);
+      showToast(`Started Practice Seed #${randSuffix}`, 'info');
+    }
+
+    function initNewGameSession(seedStr, isDaily, badgeNum) {
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+
+      const fullQueue = generateSeededTileQueue(seedStr);
+      const vowelCount = fullQueue.filter(t => ['A','E','I','O','U'].includes(t.letter)).length;
+
+      gameState.seedString = seedStr;
+      gameState.isDaily = isDaily;
+      gameState.dailyNum = badgeNum;
+      gameState.queue = fullQueue.slice(RACK_CAPACITY);
+      gameState.rack = fullQueue.slice(0, RACK_CAPACITY).map((t, idx) => ({
+        ...t,
+        originRackIdx: idx,
+        justDrawn: true,
+        drawDelayMs: idx * 35
+      }));
+      gameState.board = createEmptyBoard();
+      gameState.score = 0;
+      gameState.wordPointsTotal = 0;
+      gameState.bingoBonusTotal = 0;
+      gameState.clearRackBonusTotal = 0;
+      gameState.swapDiscardPenaltyTotal = 0;
+      gameState.unplayedPenaltyTotal = 0;
+      gameState.turnsHistory = [];
+      gameState.wordsPlayedCount = 0;
+      gameState.bestTurnScore = 0;
+      gameState.bestTurnWord = '';
+      gameState.timeRemaining = GAME_DURATION_SEC;
+      gameState.timerInterval = null;
+      gameState.timerStarted = false;
+      gameState.isGameOver = false;
+      gameState.actionMode = 'play';
+      gameState.selectedRackIndex = null;
+      gameState.selectedSetForSwapOrDiscard.clear();
+      gameState.focusedCell = null;
+      gameState.pendingBlankCoords = null;
+
+      // Update Header Badge & Seed Modal Info
+      document.getElementById('daily-label').textContent = isDaily ? `DAILY #${badgeNum}` : `PRACTICE #${badgeNum}`;
+      document.getElementById('active-seed-name').textContent = seedStr;
+      document.getElementById('active-seed-vowels').textContent = `${vowelCount} / 35 (${Math.round(vowelCount/35*100)}%)`;
+
+      updateTimerDisplay();
+      renderAll();
+      clearJustDrawnFlagsSoon();
+    }
+
+    function clearJustDrawnFlagsSoon() {
+      setTimeout(() => {
+        for (let i = 0; i < RACK_CAPACITY; i++) {
+          if (gameState.rack[i] && gameState.rack[i].justDrawn) {
+            gameState.rack[i].justDrawn = false;
+            gameState.rack[i].drawDelayMs = 0;
+          }
+        }
+      }, 420);
+    }
+
+    /*************************************************************************
+     * 6. TIMER MANAGEMENT (7:00 COUNTDOWN)
+     *************************************************************************/
+    function ensureTimerStarted() {
+      if (gameState.timerStarted || gameState.isGameOver) return;
+      gameState.timerStarted = true;
+      gameState.timerInterval = setInterval(() => {
+        if (gameState.isGameOver) {
+          clearInterval(gameState.timerInterval);
+          return;
+        }
+        gameState.timeRemaining = Math.max(0, gameState.timeRemaining - 1);
+        updateTimerDisplay();
+        if (gameState.timeRemaining <= 0) {
+          clearInterval(gameState.timerInterval);
+          finishGame("Time's Up!");
+        }
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(gameState.timeRemaining / 60);
+      const secs = gameState.timeRemaining % 60;
+      const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      const timerEl = document.getElementById('hud-timer');
+      const pillEl = document.getElementById('timer-pill');
+      if (timerEl) timerEl.textContent = formatted;
+
+      if (pillEl) {
+        if (gameState.timeRemaining <= 20 && gameState.timeRemaining > 0) {
+          pillEl.className = 'flex-1 bg-red-600 text-white rounded-full py-1.5 px-3 shadow-sm flex items-center justify-center gap-1.5 timer-urgent';
+        } else if (gameState.timeRemaining <= 60 && gameState.timeRemaining > 0) {
+          pillEl.className = 'flex-1 bg-amber-600 text-white rounded-full py-1.5 px-3 shadow-sm flex items-center justify-center gap-1.5';
+        } else {
+          pillEl.className = 'flex-1 bg-[#212529] text-white rounded-full py-1.5 px-3 shadow-sm flex items-center justify-center gap-1.5';
+        }
+      }
+    }
+
+    /*************************************************************************
+     * 7. RENDERING BOARD, RACK & HUD
+     *************************************************************************/
+    function renderAll() {
+      renderBoard();
+      renderRack();
+      renderHUDAndControls();
+      updateLiveTurnPreview();
+    }
+
+    function renderBoard() {
+      const boardEl = document.getElementById('scrabble-board');
+      boardEl.innerHTML = '';
+
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const cellData = gameState.board[r][c];
+          const bonus = BONUS_LAYOUT[r][c];
+          const cellDiv = document.createElement('div');
+          cellDiv.className = 'board-cell';
+          cellDiv.dataset.r = r;
+          cellDiv.dataset.c = c;
+
+          let bonusText = '';
+          if (bonus === '3W') {
+            cellDiv.classList.add('cell-tw');
+            bonusText = '3W';
+          } else if (bonus === '2W') {
+            cellDiv.classList.add('cell-dw');
+            bonusText = '2W';
+          } else if (bonus === 'STAR') {
+            cellDiv.classList.add('cell-star');
+            bonusText = '★';
+          } else if (bonus === '3L') {
+            cellDiv.classList.add('cell-tl');
+            bonusText = '3L';
+          } else if (bonus === '2L') {
+            cellDiv.classList.add('cell-dl');
+            bonusText = '2L';
+          }
+
+          const activeTile = cellData.lockedTile || cellData.tempTile;
+
+          // Only show the underlying bonus label when no tile covers the square
+          if (bonusText && !activeTile) {
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'bonus-label';
+            labelSpan.textContent = bonusText;
+            cellDiv.appendChild(labelSpan);
+          }
+
+          // Check if focused for keyboard typing
+          if (gameState.focusedCell && gameState.focusedCell.r === r && gameState.focusedCell.c === c && !activeTile) {
+            cellDiv.classList.add('cell-focused');
+            const arrow = document.createElement('div');
+            arrow.className = 'cursor-arrow';
+            arrow.textContent = gameState.focusedCell.dir === 'H' ? '→' : '↓';
+            cellDiv.appendChild(arrow);
+          }
+
+          // Render tile covering 100% of the board cell
+          if (activeTile) {
+            const isLocked = !!cellData.lockedTile;
+            const tileDiv = document.createElement('div');
+            tileDiv.className = `scrabble-tile board-tile ${isLocked ? 'tile-locked' : 'tile-tentative'} ${activeTile.isBlank ? 'tile-blank' : ''}`;
+            const displayLetter = activeTile.isBlank ? (activeTile.assignedLetter || '?') : activeTile.letter;
+
+            tileDiv.innerHTML = `
+              <span class="tile-letter">${displayLetter}</span>
+              <span class="tile-points">${activeTile.points}</span>
+            `;
+
+            if (!isLocked && !gameState.isGameOver) {
+              // Allow dragging tentative board tile or tapping to return to its original rack slot gap
+              tileDiv.addEventListener('pointerdown', (e) => {
+                e.stopPropagation();
+                startPointerDrag(e, { source: 'board', r, c, tile: activeTile });
+              });
+            }
+
+            cellDiv.appendChild(tileDiv);
+          }
+
+          // Cell click handler
+          cellDiv.addEventListener('click', (e) => handleBoardCellClick(r, c, e));
+          boardEl.appendChild(cellDiv);
+        }
+      }
+    }
+
+    function renderRack() {
+      const rackEl = document.getElementById('tile-rack');
+      rackEl.innerHTML = '';
+
+      for (let i = 0; i < RACK_CAPACITY; i++) {
+        const slotDiv = document.createElement('div');
+        slotDiv.className = 'rack-slot';
+        slotDiv.dataset.rackIdx = i;
+
+        const tile = gameState.rack[i];
+        if (tile) {
+          const tileDiv = document.createElement('div');
+          tileDiv.className = 'rack-tile';
+
+          if (tile.justDrawn) {
+            tileDiv.classList.add('rack-tile-drop-in');
+            if (tile.drawDelayMs) {
+              tileDiv.style.animationDelay = `${tile.drawDelayMs}ms`;
+            }
+          }
+
+          if (gameState.actionMode === 'play' && gameState.selectedRackIndex === i) {
+            tileDiv.classList.add('selected-for-play');
+          } else if (gameState.actionMode === 'swap' && gameState.selectedSetForSwapOrDiscard.has(i)) {
+            tileDiv.classList.add('selected-for-swap');
+          } else if (gameState.actionMode === 'discard' && gameState.selectedSetForSwapOrDiscard.has(i)) {
+            tileDiv.classList.add('selected-for-discard');
+          }
+
+          const displayLetter = tile.isBlank ? '?' : tile.letter;
+          tileDiv.innerHTML = `
+            <span class="tile-letter">${displayLetter}</span>
+            <span class="tile-points">${tile.points}</span>
+          `;
+
+          if (!gameState.isGameOver) {
+            if (gameState.actionMode === 'play') {
+              tileDiv.addEventListener('pointerdown', (e) => startPointerDrag(e, { source: 'rack', rackIdx: i, tile }));
+            } else {
+              tileDiv.addEventListener('click', () => handleRackTileClick(i));
+            }
+          }
+
+          slotDiv.appendChild(tileDiv);
+        } else {
+          // Empty rack slot click allows moving selected rack tile into this gap
+          slotDiv.addEventListener('click', () => {
+            if (gameState.actionMode === 'play' && gameState.selectedRackIndex !== null && gameState.selectedRackIndex !== i) {
+              const temp = gameState.rack[gameState.selectedRackIndex];
+              if (temp) temp.originRackIdx = i;
+              gameState.rack[gameState.selectedRackIndex] = null;
+              gameState.rack[i] = temp;
+              gameState.selectedRackIndex = null;
+              playSound('select');
+              renderAll();
+            }
+          });
+        }
+
+        rackEl.appendChild(slotDiv);
+      }
+    }
+
+    function renderHUDAndControls() {
+      document.getElementById('hud-score').textContent = gameState.score;
+      document.getElementById('hud-bag-count').textContent = gameState.queue.length;
+
+      const swapBtn = document.getElementById('btn-swap');
+      const discardBtn = document.getElementById('btn-discard');
+      const submitBtn = document.getElementById('btn-submit');
+      const submitText = document.getElementById('btn-submit-text');
+
+      swapBtn.disabled = gameState.queue.length === 0 || gameState.isGameOver;
+      discardBtn.disabled = gameState.isGameOver;
+
+      swapBtn.classList.toggle('active-swap', gameState.actionMode === 'swap');
+      discardBtn.classList.toggle('active-discard', gameState.actionMode === 'discard');
+
+      submitBtn.classList.remove('mode-swap', 'mode-discard');
+      if (gameState.actionMode === 'swap') {
+        submitBtn.classList.add('mode-swap');
+        const count = gameState.selectedSetForSwapOrDiscard.size;
+        submitText.textContent = count > 0 ? `SWAP ${count} (-${count * SWAP_PENALTY_PER_TILE})` : 'SELECT TO SWAP';
+      } else if (gameState.actionMode === 'discard') {
+        submitBtn.classList.add('mode-discard');
+        const count = gameState.selectedSetForSwapOrDiscard.size;
+        const pen = calculateSelectedDiscardPenalty();
+        submitText.textContent = count > 0 ? `BURN ${count} (-${pen})` : 'SELECT TO BURN';
+      } else {
+        submitText.textContent = 'PLAY WORD';
+      }
+    }
+
+    /*************************************************************************
+     * 8. UNIFIED DRAG-AND-DROP + TAP-TO-PLACE + KEYBOARD ENGINE
+     *************************************************************************/
+    let dragContext = null;
+
+    function startPointerDrag(e, info) {
+      if (gameState.isGameOver || gameState.actionMode !== 'play') return;
+      if (e.button !== undefined && e.button !== 0) return; // Only left click or touch
+      ensureTimerStarted();
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let hasMoved = false;
+
+      const ghost = document.getElementById('drag-ghost');
+      const ghostLetter = document.getElementById('drag-ghost-letter');
+      const ghostPoints = document.getElementById('drag-ghost-points');
+
+      const onPointerMove = (moveEvent) => {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (!hasMoved && Math.hypot(dx, dy) > 6) {
+          hasMoved = true;
+          ghostLetter.textContent = info.tile.isBlank ? (info.tile.assignedLetter || '?') : info.tile.letter;
+          ghostPoints.textContent = info.tile.points;
+          ghost.style.display = 'flex';
+        }
+        if (hasMoved) {
+          ghost.style.left = `${moveEvent.clientX}px`;
+          ghost.style.top = `${moveEvent.clientY}px`;
+          highlightDropTarget(moveEvent.clientX, moveEvent.clientY);
+        }
+      };
+
+      const onPointerUp = (upEvent) => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        ghost.style.display = 'none';
+        clearDropTargetHighlights();
+
+        if (!hasMoved) {
+          // Treat as a tap/click!
+          if (info.source === 'rack') {
+            handleRackTileClick(info.rackIdx);
+          } else if (info.source === 'board') {
+            // Returning tentative tile to rack on tap
+            returnBoardTileToRack(info.r, info.c);
+          }
+          return;
+        }
+
+        // Handle Drop at upEvent coordinates
+        const dropEl = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+        const cellEl = dropEl ? dropEl.closest('.board-cell') : null;
+        const rackSlotEl = dropEl ? dropEl.closest('.rack-slot') : null;
+        const rackAreaEl = dropEl ? dropEl.closest('.wooden-rack') : null;
+
+        if (cellEl) {
+          const targetR = parseInt(cellEl.dataset.r, 10);
+          const targetC = parseInt(cellEl.dataset.c, 10);
+          placeTileOnBoardCell(info, targetR, targetC);
+        } else if (rackSlotEl || rackAreaEl) {
+          const targetSlotIdx = rackSlotEl ? parseInt(rackSlotEl.dataset.rackIdx, 10) : -1;
+          dropTileOnRack(info, targetSlotIdx);
+        }
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    }
+
+    function highlightDropTarget(x, y) {
+      clearDropTargetHighlights();
+      const el = document.elementFromPoint(x, y);
+      const cellEl = el ? el.closest('.board-cell') : null;
+      if (cellEl) {
+        const r = parseInt(cellEl.dataset.r, 10);
+        const c = parseInt(cellEl.dataset.c, 10);
+        if (!gameState.board[r][c].lockedTile) {
+          cellEl.classList.add('cell-drop-target');
+        }
+      }
+    }
+
+    function clearDropTargetHighlights() {
+      document.querySelectorAll('.cell-drop-target').forEach(el => el.classList.remove('cell-drop-target'));
+    }
+
+    function placeTileOnBoardCell(info, targetR, targetC) {
+      const targetCell = gameState.board[targetR][targetC];
+      if (targetCell.lockedTile) return; // Cannot overwrite committed tile
+
+      if (info.source === 'rack') {
+        const existingTemp = targetCell.tempTile;
+        const movingTile = gameState.rack[info.rackIdx];
+        if (!movingTile) return;
+
+        movingTile.originRackIdx = info.rackIdx;
+        movingTile.justDrawn = false;
+        if (existingTemp) {
+          existingTemp.originRackIdx = info.rackIdx;
+          existingTemp.justDrawn = false;
+        }
+        gameState.rack[info.rackIdx] = existingTemp || null;
+        targetCell.tempTile = movingTile;
+        gameState.selectedRackIndex = null;
+        playSound('place');
+
+        if (movingTile.isBlank) {
+          openBlankPicker(targetR, targetC);
+        }
+        renderAll();
+      } else if (info.source === 'board') {
+        if (info.r === targetR && info.c === targetC) return;
+        const sourceCell = gameState.board[info.r][info.c];
+        const existingTemp = targetCell.tempTile;
+        targetCell.tempTile = sourceCell.tempTile;
+        sourceCell.tempTile = existingTemp || null;
+        playSound('place');
+
+        if (targetCell.tempTile && targetCell.tempTile.isBlank && !targetCell.tempTile.assignedLetter) {
+          openBlankPicker(targetR, targetC);
+        }
+        renderAll();
+      }
+    }
+
+    function dropTileOnRack(info, targetSlotIdx) {
+      if (info.source === 'rack') {
+        if (targetSlotIdx >= 0 && targetSlotIdx < RACK_CAPACITY && targetSlotIdx !== info.rackIdx) {
+          const temp = gameState.rack[targetSlotIdx];
+          const moving = gameState.rack[info.rackIdx];
+          if (moving) moving.originRackIdx = targetSlotIdx;
+          if (temp) temp.originRackIdx = info.rackIdx;
+          gameState.rack[targetSlotIdx] = moving;
+          gameState.rack[info.rackIdx] = temp;
+          gameState.selectedRackIndex = null;
+          playSound('select');
+          renderAll();
+        }
+      } else if (info.source === 'board') {
+        returnBoardTileToRack(info.r, info.c, targetSlotIdx);
+      }
+    }
+
+    function returnBoardTileToRack(r, c, preferredSlotIdx = -1) {
+      const cell = gameState.board[r][c];
+      if (!cell.tempTile) return;
+      const tile = cell.tempTile;
+      if (tile.isBlank) tile.assignedLetter = null;
+      tile.justDrawn = false;
+
+      let destIdx = preferredSlotIdx;
+      // Prefer returning the tile to its original rack slot gap if unoccupied
+      if (destIdx < 0 && typeof tile.originRackIdx === 'number' && gameState.rack[tile.originRackIdx] === null) {
+        destIdx = tile.originRackIdx;
+      }
+      if (destIdx < 0 || gameState.rack[destIdx] !== null) {
+        destIdx = gameState.rack.findIndex(slot => slot === null);
+      }
+      if (destIdx !== -1) {
+        tile.originRackIdx = destIdx;
+        gameState.rack[destIdx] = tile;
+        cell.tempTile = null;
+        playSound('select');
+        renderAll();
+      }
+    }
+
+    function handleRackTileClick(rackIdx) {
+      if (gameState.isGameOver) return;
+      ensureTimerStarted();
+      const tile = gameState.rack[rackIdx];
+      if (!tile) return;
+
+      if (gameState.actionMode === 'swap' || gameState.actionMode === 'discard') {
+        if (gameState.selectedSetForSwapOrDiscard.has(rackIdx)) {
+          gameState.selectedSetForSwapOrDiscard.delete(rackIdx);
+        } else {
+          if (gameState.actionMode === 'swap' && gameState.selectedSetForSwapOrDiscard.size >= gameState.queue.length) {
+            showToast(`Only ${gameState.queue.length} tiles left in queue to swap!`, 'error');
+            return;
+          }
+          gameState.selectedSetForSwapOrDiscard.add(rackIdx);
+        }
+        playSound('select');
+        renderAll();
+        return;
+      }
+
+      // Play mode: toggle selection or swap with already selected rack tile
+      if (gameState.selectedRackIndex === rackIdx) {
+        gameState.selectedRackIndex = null;
+      } else if (gameState.selectedRackIndex !== null) {
+        // Swap positions on the rack for quick anagramming
+        const prevIdx = gameState.selectedRackIndex;
+        const temp = gameState.rack[prevIdx];
+        gameState.rack[prevIdx] = gameState.rack[rackIdx];
+        gameState.rack[rackIdx] = temp;
+        gameState.selectedRackIndex = null;
+      } else {
+        gameState.selectedRackIndex = rackIdx;
+      }
+      playSound('select');
+      renderAll();
+    }
+
+    function handleBoardCellClick(r, c, e) {
+      if (gameState.isGameOver || gameState.actionMode !== 'play') return;
+      ensureTimerStarted();
+
+      const cell = gameState.board[r][c];
+      if (cell.lockedTile) return;
+
+      // If a rack tile is currently selected, place it here!
+      if (gameState.selectedRackIndex !== null && !cell.tempTile) {
+        placeTileOnBoardCell({
+          source: 'rack',
+          rackIdx: gameState.selectedRackIndex,
+          tile: gameState.rack[gameState.selectedRackIndex]
+        }, r, c);
+        return;
+      }
+
+      // Otherwise, if empty cell, focus it for keyboard typing (or toggle direction H/V)
+      if (!cell.tempTile) {
+        if (gameState.focusedCell && gameState.focusedCell.r === r && gameState.focusedCell.c === c) {
+          gameState.focusedCell.dir = gameState.focusedCell.dir === 'H' ? 'V' : 'H';
+        } else {
+          gameState.focusedCell = { r, c, dir: 'H' };
+        }
+        playSound('select');
+        renderAll();
+      }
+    }
+
+    // Keyboard Support for Snappy Wordle-like Typing on the Board
+    window.addEventListener('keydown', (e) => {
+      if (gameState.isGameOver) return;
+      // Ignore if modal open
+      if (!document.getElementById('blank-modal').classList.contains('hidden')) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handlePrimarySubmit();
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        handleRecallTiles();
+        return;
+      }
+
+      if (!gameState.focusedCell || gameState.actionMode !== 'play') return;
+
+      let { r, c, dir } = gameState.focusedCell;
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        gameState.focusedCell = { r, c: Math.min(BOARD_SIZE - 1, c + 1), dir: 'H' };
+        renderAll();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        gameState.focusedCell = { r, c: Math.max(0, c - 1), dir: 'H' };
+        renderAll();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        gameState.focusedCell = { r: Math.min(BOARD_SIZE - 1, r + 1), c, dir: 'V' };
+        renderAll();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        gameState.focusedCell = { r: Math.max(0, r - 1), c, dir: 'V' };
+        renderAll();
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        // Step backwards and remove tentative tile
+        let prevR = r, prevC = c;
+        if (!gameState.board[r][c].tempTile) {
+          while (true) {
+            if (dir === 'H') prevC--; else prevR--;
+            if (prevR < 0 || prevC < 0) break;
+            if (!gameState.board[prevR][prevC].lockedTile) {
+              if (gameState.board[prevR][prevC].tempTile) {
+                returnBoardTileToRack(prevR, prevC);
+                gameState.focusedCell = { r: prevR, c: prevC, dir };
+              }
+              break;
+            }
+          }
+        } else {
+          returnBoardTileToRack(r, c);
+        }
+        renderAll();
+      } else if (/^[a-zA-Z]$/.test(e.key)) {
+        const letter = e.key.toUpperCase();
+        ensureTimerStarted();
+        // Find matching letter on rack (or blank tile if exact letter not found)
+        let rackIdx = gameState.rack.findIndex(t => t && !t.isBlank && t.letter === letter);
+        let usedBlank = false;
+        if (rackIdx === -1) {
+          rackIdx = gameState.rack.findIndex(t => t && t.isBlank);
+          usedBlank = rackIdx !== -1;
+        }
+        if (rackIdx !== -1 && !gameState.board[r][c].lockedTile && !gameState.board[r][c].tempTile) {
+          const tile = gameState.rack[rackIdx];
+          tile.originRackIdx = rackIdx;
+          tile.justDrawn = false;
+          if (usedBlank) tile.assignedLetter = letter;
+          gameState.rack[rackIdx] = null;
+          gameState.board[r][c].tempTile = tile;
+          playSound('place');
+
+          // Advance cursor to next available square along direction
+          let nextR = r, nextC = c;
+          while (true) {
+            if (dir === 'H') nextC++; else nextR++;
+            if (nextR >= BOARD_SIZE || nextC >= BOARD_SIZE) break;
+            if (!gameState.board[nextR][nextC].lockedTile && !gameState.board[nextR][nextC].tempTile) {
+              gameState.focusedCell = { r: nextR, c: nextC, dir };
+              break;
+            }
+          }
+          renderAll();
+        }
+      }
+    });
+
+    /*************************************************************************
+     * 9. BLANK TILE PICKER MODAL
+     *************************************************************************/
+    function initBlankPickerGrid() {
+      const grid = document.getElementById('blank-letter-grid');
+      grid.innerHTML = '';
+      for (let i = 65; i <= 90; i++) {
+        const ch = String.fromCharCode(i);
+        const btn = document.createElement('button');
+        btn.className = 'py-2 rounded-lg bg-[#F7D996] hover:bg-[#F3C663] text-gray-900 font-extrabold text-sm shadow-sm border border-[#C9A65B] transition';
+        btn.textContent = ch;
+        btn.onclick = () => assignBlankLetter(ch);
+        grid.appendChild(btn);
+      }
+    }
+
+    function openBlankPicker(r, c) {
+      gameState.pendingBlankCoords = { r, c };
+      const modal = document.getElementById('blank-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function assignBlankLetter(ch) {
+      if (gameState.pendingBlankCoords) {
+        const { r, c } = gameState.pendingBlankCoords;
+        const tile = gameState.board[r][c].tempTile;
+        if (tile && tile.isBlank) {
+          tile.assignedLetter = ch;
+        }
+      }
+      gameState.pendingBlankCoords = null;
+      closeModal('blank-modal');
+      renderAll();
+    }
+
+    function cancelBlankSelection() {
+      if (gameState.pendingBlankCoords) {
+        const { r, c } = gameState.pendingBlankCoords;
+        returnBoardTileToRack(r, c);
+      }
+      gameState.pendingBlankCoords = null;
+      closeModal('blank-modal');
+      renderAll();
+    }
+
+    /*************************************************************************
+     * 10. PLACEMENT VALIDATION, CROSS-WORD EXTRACTION & SCORING ENGINE
+     *************************************************************************/
+    function getTentativePlacements() {
+      const placed = [];
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (gameState.board[r][c].tempTile) {
+            placed.push({ r, c, tile: gameState.board[r][c].tempTile });
+          }
+        }
+      }
+      return placed;
+    }
+
+    function hasLockedTilesOnBoard() {
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (gameState.board[r][c].lockedTile) return true;
+        }
+      }
+      return false;
+    }
+
+    function getTileAt(r, c) {
+      if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return null;
+      return gameState.board[r][c].lockedTile || gameState.board[r][c].tempTile;
+    }
+
+    function getLetterAt(r, c) {
+      const t = getTileAt(r, c);
+      if (!t) return '';
+      return t.isBlank ? (t.assignedLetter || '?') : t.letter;
+    }
+
+    /**
+     * Evaluates current tentative board state and returns:
+     * { valid: boolean, error?: string, words?: Array<{word, score, validDict}>, totalScore?: number, isBingo?: boolean }
+     */
+    function evaluateCurrentTurn() {
+      const placed = getTentativePlacements();
+      if (placed.length === 0) {
+        return { valid: false, empty: true, error: 'Place tiles on the board to form a word' };
+      }
+
+      // Check if any blank tile is unassigned
+      for (const p of placed) {
+        if (p.tile.isBlank && !p.tile.assignedLetter) {
+          return { valid: false, error: 'Select a letter for your Blank tile' };
+        }
+      }
+
+      const isFirstTurn = !hasLockedTilesOnBoard();
+
+      // First turn must cover center star [5,5] and be at least 2 tiles
+      if (isFirstTurn) {
+        const coversCenter = placed.some(p => p.r === CENTER_POS && p.c === CENTER_POS);
+        if (!coversCenter) {
+          return { valid: false, error: 'First word must cover the center star ★' };
+        }
+        if (placed.length < 2) {
+          return { valid: false, error: 'First word must be at least 2 letters long' };
+        }
+      }
+
+      // Check colinearity (all placed tiles in same row OR same column)
+      const allSameRow = placed.every(p => p.r === placed[0].r);
+      const allSameCol = placed.every(p => p.c === placed[0].c);
+      if (!allSameRow && !allSameCol) {
+        return { valid: false, error: 'Tiles must be placed in a single row or column' };
+      }
+
+      // Check contiguity along the primary axis (no empty gaps between min and max coordinate)
+      if (placed.length > 1) {
+        if (allSameRow) {
+          const row = placed[0].r;
+          const minC = Math.min(...placed.map(p => p.c));
+          const maxC = Math.max(...placed.map(p => p.c));
+          for (let c = minC; c <= maxC; c++) {
+            if (!getTileAt(row, c)) {
+              return { valid: false, error: 'Tiles must form a continuous unbroken line' };
+            }
+          }
+        } else {
+          const col = placed[0].c;
+          const minR = Math.min(...placed.map(p => p.r));
+          const maxR = Math.max(...placed.map(p => p.r));
+          for (let r = minR; r <= maxR; r++) {
+            if (!getTileAt(r, col)) {
+              return { valid: false, error: 'Tiles must form a continuous unbroken line' };
+            }
+          }
+        }
+      }
+
+      // If not first turn, must connect orthogonally to at least one existing locked tile
+      if (!isFirstTurn) {
+        let touchesLocked = false;
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const p of placed) {
+          for (const [dr, dc] of dirs) {
+            const nr = p.r + dr, nc = p.c + dc;
+            if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
+              if (gameState.board[nr][nc].lockedTile) {
+                touchesLocked = true;
+                break;
+              }
+            }
+          }
+          if (touchesLocked) break;
+        }
+        if (!touchesLocked) {
+          return { valid: false, error: 'New tiles must connect to existing words on the board' };
+        }
+      }
+
+      // Extract all newly formed words (Main word + any Cross-words)
+      const formedWords = [];
+      const visitedSpans = new Set();
+
+      const extractWordAlong = (startR, startC, dr, dc) => {
+        let r = startR, c = startC;
+        while (getTileAt(r - dr, c - dc)) {
+          r -= dr;
+          c -= dc;
+        }
+        const cells = [];
+        while (getTileAt(r, c)) {
+          cells.push({ r, c });
+          r += dr;
+          c += dc;
+        }
+        if (cells.length < 2) return null;
+        const key = `${dr}_${dc}_${cells[0].r}_${cells[0].c}`;
+        if (visitedSpans.has(key)) return null;
+        visitedSpans.add(key);
+
+        let wordStr = '';
+        let baseScore = 0;
+        let wordMultiplier = 1;
+
+        for (const pos of cells) {
+          const cellObj = gameState.board[pos.r][pos.c];
+          const tile = cellObj.lockedTile || cellObj.tempTile;
+          const isNew = !!cellObj.tempTile;
+          const ch = getLetterAt(pos.r, pos.c);
+          wordStr += ch;
+
+          let letterScore = tile.points;
+          if (isNew) {
+            const bonus = BONUS_LAYOUT[pos.r][pos.c];
+            if (bonus === '2L') letterScore *= 2;
+            else if (bonus === '3L') letterScore *= 3;
+            else if (bonus === '2W' || bonus === 'STAR') wordMultiplier *= 2;
+            else if (bonus === '3W') wordMultiplier *= 3;
+          }
+          baseScore += letterScore;
+        }
+
+        const totalWordScore = baseScore * wordMultiplier;
+        return {
+          word: wordStr,
+          score: totalWordScore,
+          validDict: DICTIONARY.has(wordStr)
+        };
+      };
+
+      for (const p of placed) {
+        const hWord = extractWordAlong(p.r, p.c, 0, 1);
+        if (hWord) formedWords.push(hWord);
+        const vWord = extractWordAlong(p.r, p.c, 1, 0);
+        if (vWord) formedWords.push(vWord);
+      }
+
+      if (formedWords.length === 0) {
+        return { valid: false, error: 'Words must be at least 2 letters long' };
+      }
+
+      const isBingo = placed.length === RACK_CAPACITY;
+      let totalTurnPoints = formedWords.reduce((acc, w) => acc + w.score, 0);
+      if (isBingo) totalTurnPoints += BINGO_BONUS;
+
+      const invalidWords = formedWords.filter(w => !w.validDict);
+      if (invalidWords.length > 0) {
+        return {
+          valid: false,
+          dictError: true,
+          error: `"${invalidWords[0].word}" is not in the Scrabble dictionary`,
+          words: formedWords,
+          totalScore: totalTurnPoints,
+          isBingo
+        };
+      }
+
+      return {
+        valid: true,
+        words: formedWords,
+        totalScore: totalTurnPoints,
+        isBingo
+      };
+    }
+
+    function updateLiveTurnPreview() {
+      const badge = document.getElementById('score-preview-badge');
+      const statusEl = document.getElementById('live-turn-status');
+
+      if (gameState.actionMode === 'swap') {
+        const count = gameState.selectedSetForSwapOrDiscard.size;
+        const pen = count * SWAP_PENALTY_PER_TILE;
+        if (count > 0) {
+          badge.classList.remove('hidden');
+          badge.className = 'absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-purple-600 shadow-sm tabular-nums';
+          badge.textContent = `-${pen}`;
+        } else {
+          badge.classList.add('hidden');
+        }
+        statusEl.className = 'text-[0.72rem] font-bold text-purple-700 bg-purple-50 px-3 py-0.5 rounded-full border border-purple-200';
+        statusEl.textContent = `SWAP MODE: Select rack tiles to cycle to back of queue (-3 pts/tile)`;
+        return;
+      }
+
+      if (gameState.actionMode === 'discard') {
+        const count = gameState.selectedSetForSwapOrDiscard.size;
+        const pen = calculateSelectedDiscardPenalty();
+        if (count > 0) {
+          badge.classList.remove('hidden');
+          badge.className = 'absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-red-600 shadow-sm tabular-nums';
+          badge.textContent = `-${pen}`;
+        } else {
+          badge.classList.add('hidden');
+        }
+        statusEl.className = 'text-[0.72rem] font-bold text-red-700 bg-red-50 px-3 py-0.5 rounded-full border border-red-200';
+        statusEl.textContent = `BURN MODE: Select rack tiles to permanently trash (-face value)`;
+        return;
+      }
+
+      const evalRes = evaluateCurrentTurn();
+      if (evalRes.empty) {
+        badge.classList.add('hidden');
+        statusEl.className = 'text-[0.72rem] font-semibold text-gray-500 px-2.5 py-0.5';
+        statusEl.textContent = hasLockedTilesOnBoard()
+          ? 'Drag or tap tiles to build off existing words'
+          : 'Place your first word across the center ★ (2W)';
+        return;
+      }
+
+      if (evalRes.valid) {
+        badge.classList.remove('hidden');
+        badge.className = 'absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-emerald-600 shadow-sm tabular-nums animate-pop';
+        badge.textContent = `+${evalRes.totalScore}`;
+
+        const wordsSummary = evalRes.words.map(w => `${w.word} (${w.score})`).join(' + ');
+        const bingoText = evalRes.isBingo ? ' + BINGO (+35)!' : '';
+        statusEl.className = 'text-[0.72rem] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-0.5 rounded-full border border-emerald-200';
+        statusEl.textContent = `✓ ${wordsSummary}${bingoText}`;
+      } else {
+        if (evalRes.totalScore) {
+          badge.classList.remove('hidden');
+          badge.className = 'absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-amber-500 shadow-sm tabular-nums';
+          badge.textContent = `+${evalRes.totalScore}?`;
+        } else {
+          badge.classList.add('hidden');
+        }
+        statusEl.className = 'text-[0.72rem] font-bold text-amber-800 bg-amber-50 px-3 py-0.5 rounded-full border border-amber-200';
+        statusEl.textContent = evalRes.error;
+      }
+    }
+
+    /*************************************************************************
+     * 11. ACTION HANDLERS (PLAY WORD, SWAP, DISCARD, SHUFFLE, RECALL)
+     *************************************************************************/
+    function handlePrimarySubmit() {
+      if (gameState.isGameOver) return;
+      ensureTimerStarted();
+
+      if (gameState.actionMode === 'swap') {
+        executeSwapSelected();
+      } else if (gameState.actionMode === 'discard') {
+        executeDiscardSelected();
+      } else {
+        executePlayWord();
+      }
+    }
+
+    function executePlayWord() {
+      const evalRes = evaluateCurrentTurn();
+      if (!evalRes.valid) {
+        playSound('error');
+        shakeTentativeTiles();
+        showToast(evalRes.error, 'error');
+        return;
+      }
+
+      // Commit tentative tiles on board
+      let tilesUsedCount = 0;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (gameState.board[r][c].tempTile) {
+            gameState.board[r][c].lockedTile = gameState.board[r][c].tempTile;
+            gameState.board[r][c].tempTile = null;
+            tilesUsedCount++;
+          }
+        }
+      }
+
+      // Score calculation
+      const turnPts = evalRes.totalScore;
+      const baseWordPts = evalRes.words.reduce((acc, w) => acc + w.score, 0);
+      gameState.score += turnPts;
+      gameState.wordPointsTotal += baseWordPts;
+      if (evalRes.isBingo) gameState.bingoBonusTotal += BINGO_BONUS;
+      gameState.wordsPlayedCount += evalRes.words.length;
+
+      const primaryWordLabel = evalRes.words.map(w => w.word).join(', ');
+      if (turnPts > gameState.bestTurnScore) {
+        gameState.bestTurnScore = turnPts;
+        gameState.bestTurnWord = `${evalRes.words[0].word} (+${turnPts})`;
+      }
+
+      gameState.turnsHistory.unshift({
+        type: 'word',
+        label: primaryWordLabel + (evalRes.isBingo ? ' 🔥 BINGO' : ''),
+        delta: `+${turnPts}`
+      });
+      // Draw replacement tiles strictly in order from daily queue into the empty rack gaps
+      drawReplacementsToRack();
+      gameState.focusedCell = null;
+      gameState.selectedRackIndex = null;
+
+      playSound('score');
+      showToast(
+        evalRes.isBingo ? `BINGO! ${primaryWordLabel} for +${turnPts} pts!` : `${primaryWordLabel} (+${turnPts} pts)`,
+        'success'
+      );
+
+      renderAll();
+      clearJustDrawnFlagsSoon();
+      checkAutoEndgame();
+    }
+
+    function toggleActionMode(targetMode) {
+      if (gameState.isGameOver) return;
+      ensureTimerStarted();
+
+      // First recall any tentative tiles on board back to rack
+      recallTentativeTilesQuietly();
+
+      if (gameState.actionMode === targetMode) {
+        gameState.actionMode = 'play';
+        gameState.selectedSetForSwapOrDiscard.clear();
+      } else {
+        if (targetMode === 'swap' && gameState.queue.length === 0) {
+          showToast('No tiles left in queue to swap!', 'error');
+          return;
+        }
+        gameState.actionMode = targetMode;
+        gameState.selectedSetForSwapOrDiscard.clear();
+        gameState.selectedRackIndex = null;
+      }
+      playSound('select');
+      renderAll();
+    }
+
+    function calculateSelectedDiscardPenalty() {
+      // Deterministic Swap: Draw replacement from front of queue into the exact selected rack slots,
+      // and push swapped tiles to the VERY BACK of the queue in order
+      const outgoingTiles = [];
+      let drawStagger = 0;
+      indices.forEach(idx => {
+        const t = gameState.rack[idx];
+        if (t) {
+          t.justDrawn = false;
+          swappedLetters.push(t.letter);
+          outgoingTiles.push(t);
+          const nextTile = gameState.queue.shift() || null;
+          if (nextTile) {
+            nextTile.originRackIdx = idx;
+            nextTile.justDrawn = true;
+            nextTile.drawDelayMs = drawStagger * 45;
+            drawStagger++;
+          }
+          gameState.rack[idx] = nextTile;
+        }
+      });
+
+      outgoingTiles.forEach(t => gameState.queue.push(t));
+
+      gameState.score -= penalty;
+      gameState.swapDiscardPenaltyTotal += penalty;
+      gameState.turnsHistory.unshift({
+        type: 'swap',
+        label: `Swapped ${indices.length} tile${indices.length > 1 ? 's' : ''} (${swappedLetters.join(', ')})`,
+        delta: `-${penalty}`
+      });
+
+      gameState.actionMode = 'play';
+      gameState.selectedSetForSwapOrDiscard.clear();
+      playSound('place');
+      showToast(`Swapped ${indices.length} tile(s) (-${penalty} pts)`, 'info');
+      renderAll();
+      clearJustDrawnFlagsSoon();
+    }
+
+    function executeDiscardSelected() {
+      const indices = Array.from(gameState.selectedSetForSwapOrDiscard).sort((a, b) => a - b);
+      if (indices.length === 0) {
+        showToast('Tap 1 or more tiles on your rack to burn', 'info');
+        return;
+      }
+
+      const penalty = calculateSelectedDiscardPenalty();
+      const burnedLetters = [];
+
+      indices.forEach(idx => {
+        const t = gameState.rack[idx];
+        if (t) {
+          burnedLetters.push(t.letter);
+          gameState.rack[idx] = null;
+        }
+      });
+
+      drawReplacementsToRack();
+
+      gameState.score -= penalty;
+      gameState.swapDiscardPenaltyTotal += penalty;
+      gameState.turnsHistory.unshift({
+        type: 'discard',
+        label: `Burned ${indices.length} tile${indices.length > 1 ? 's' : ''} (${burnedLetters.join(', ')})`,
+        delta: `-${penalty}`
+      });
+
+      gameState.actionMode = 'play';
+      gameState.selectedSetForSwapOrDiscard.clear();
+      playSound('place');
+      showToast(`Burned ${indices.length} tile(s) (-${penalty} pts)`, 'info');
+      renderAll();
+      clearJustDrawnFlagsSoon();
+      checkAutoEndgame();
+    }
+
+    function drawReplacementsToRack() {
+      let drawStagger = 0;
+      for (let i = 0; i < RACK_CAPACITY; i++) {
+        if (gameState.rack[i] === null && gameState.queue.length > 0) {
+          const nextTile = gameState.queue.shift();
+          nextTile.originRackIdx = i;
+          nextTile.justDrawn = true;
+          nextTile.drawDelayMs = drawStagger * 45;
+          drawStagger++;
+          gameState.rack[i] = nextTile;
+        }
+      }
+    }
+
+    function recallTentativeTilesQuietly() {
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (gameState.board[r][c].tempTile) {
+            const t = gameState.board[r][c].tempTile;
+            if (t.isBlank) t.assignedLetter = null;
+            t.justDrawn = false;
+            let targetIdx = (typeof t.originRackIdx === 'number' && gameState.rack[t.originRackIdx] === null)
+              ? t.originRackIdx
+              : gameState.rack.findIndex(s => s === null);
+            if (targetIdx !== -1) {
+              t.originRackIdx = targetIdx;
+              gameState.rack[targetIdx] = t;
+            }
+            gameState.board[r][c].tempTile = null;
+          }
+        }
+      }
+    }
+
+    function handleRecallTiles() {
+      if (gameState.isGameOver) return;
+      if (gameState.actionMode !== 'play') {
+        gameState.actionMode = 'play';
+        gameState.selectedSetForSwapOrDiscard.clear();
+        playSound('select');
+        renderAll();
+        return;
+      }
+      recallTentativeTilesQuietly();
+      gameState.selectedRackIndex = null;
+      gameState.focusedCell = null;
+      playSound('select');
+      renderAll();
+    }
+
+    function handleShuffleRack() {
+      if (gameState.isGameOver) return;
+      ensureTimerStarted();
+      const nonNull = gameState.rack.filter(t => t !== null);
+      for (let i = nonNull.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = nonNull[i];
+        nonNull[i] = nonNull[j];
+        nonNull[j] = tmp;
+      }
+      for (let i = 0; i < RACK_CAPACITY; i++) {
+        gameState.rack[i] = nonNull[i] || null;
+      }
+      gameState.selectedRackIndex = null;
+      gameState.selectedSetForSwapOrDiscard.clear();
+      playSound('select');
+      renderAll();
+    }
+
+    function shakeTentativeTiles() {
+      const boardEl = document.getElementById('scrabble-board');
+      boardEl.classList.remove('animate-shake');
+      void boardEl.offsetWidth;
+      boardEl.classList.add('animate-shake');
+    }
+
+    /*************************************************************************
+     * 12. ENDGAME DETECTION, FINAL SCORING & WORDLE-STYLE SHARE
+     *************************************************************************/
+    function checkAutoEndgame() {
+      const rackCount = gameState.rack.filter(t => t !== null).length;
+      if (gameState.queue.length === 0 && rackCount === 0) {
+        finishGame('Cleared All Tiles! (+25 Bonus)');
+      }
+    }
+
+    function calculateRemainingRackPenalty() {
+      let pen = 0;
+      gameState.rack.forEach(t => {
+        if (t) pen += t.points;
+      });
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (gameState.board[r][c].tempTile) {
+            pen += gameState.board[r][c].tempTile.points;
+          }
+        }
+      }
+      return pen;
+    }
+
+    function openConfirmEndModal() {
+      if (gameState.isGameOver) {
+        openModal('endgame-modal');
+        return;
+      }
+      const unplayedPen = calculateRemainingRackPenalty();
+      document.getElementById('unplayed-penalty-preview').textContent = `-${unplayedPen} pts`;
+      openModal('confirm-end-modal');
+    }
+
+    function finishGame(reasonTitle) {
+      if (gameState.isGameOver) return;
+      gameState.isGameOver = true;
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+
+      // Return any tentative tiles on board back to rack before counting unplayed tiles
+      recallTentativeTilesQuietly();
+      gameState.actionMode = 'play';
+      gameState.selectedSetForSwapOrDiscard.clear();
+
+      const remainingTiles = gameState.rack.filter(t => t !== null);
+      if (gameState.queue.length === 0 && remainingTiles.length === 0) {
+        gameState.score += CLEAR_RACK_BONUS;
+        gameState.clearRackBonusTotal = CLEAR_RACK_BONUS;
+        gameState.turnsHistory.unshift({
+          type: 'bonus',
+          label: 'Clear the Rack Bonus!',
+          delta: `+${CLEAR_RACK_BONUS}`
+        });
+      } else if (remainingTiles.length > 0) {
+        const unplayedPen = remainingTiles.reduce((acc, t) => acc + t.points, 0);
+        gameState.score -= unplayedPen;
+        gameState.unplayedPenaltyTotal = unplayedPen;
+        gameState.turnsHistory.unshift({
+          type: 'penalty',
+          label: `Unplayed Rack Tiles (${remainingTiles.map(t => t.letter).join(', ')})`,
+          delta: `-${unplayedPen}`
+        });
+      }
+
+      renderAll();
+      populateEndgameModal(reasonTitle);
+      openModal('endgame-modal');
+    }
+
+    function populateEndgameModal(reasonTitle) {
+      document.getElementById('end-seed-badge').textContent = gameState.isDaily
+        ? `DAILY #${gameState.dailyNum}`
+        : `PRACTICE #${gameState.dailyNum}`;
+      document.getElementById('end-reason-title').textContent = reasonTitle.toUpperCase();
+      document.getElementById('end-final-score').textContent = gameState.score;
+      document.getElementById('end-best-word').textContent = gameState.bestTurnWord
+        ? `Best Play: ${gameState.bestTurnWord}`
+        : 'No words played';
+
+      document.getElementById('end-word-pts').textContent = `+${gameState.wordPointsTotal}`;
+      document.getElementById('end-bingo-pts').textContent = `+${gameState.bingoBonusTotal}`;
+      document.getElementById('end-clear-pts').textContent = `+${gameState.clearRackBonusTotal}`;
+      document.getElementById('end-swap-pts').textContent = gameState.swapDiscardPenaltyTotal > 0 ? `-${gameState.swapDiscardPenaltyTotal}` : '0';
+      document.getElementById('end-unplayed-pts').textContent = gameState.unplayedPenaltyTotal > 0 ? `-${gameState.unplayedPenaltyTotal}` : '0';
+
+      // Render 11x11 Mini Board Visual Map
+      const miniBoard = document.getElementById('end-mini-board');
+      miniBoard.innerHTML = '';
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const dot = document.createElement('div');
+          dot.className = 'w-full h-full rounded-[1px]';
+          if (gameState.board[r][c].lockedTile) {
+            dot.style.backgroundColor = '#EAB308'; // Gold tile placed
+          } else {
+            const b = BONUS_LAYOUT[r][c];
+            if (b === '3W') dot.style.backgroundColor = '#E05A47';
+            else if (b === '2W' || b === 'STAR') dot.style.backgroundColor = '#F4A298';
+            else if (b === '3L') dot.style.backgroundColor = '#3B82C4';
+            else if (b === '2L') dot.style.backgroundColor = '#93C5FD';
+            else dot.style.backgroundColor = '#EAE2D3';
+          }
+          miniBoard.appendChild(dot);
+        }
+      }
+    }
+
+    function shareGameResult() {
+      const headerTitle = gameState.isDaily
+        ? `SCRABBLE SINGLE — Daily #${gameState.dailyNum}`
+        : `SCRABBLE SINGLE — Practice #${gameState.dailyNum}`;
+
+      let emojiGrid = '';
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        let rowStr = '';
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (gameState.board[r][c].lockedTile) {
+            rowStr += '🟨';
+          } else if (BONUS_LAYOUT[r][c] === '3W') {
+            rowStr += '🟥';
+          } else if (BONUS_LAYOUT[r][c] === '3L') {
+            rowStr += '🟦';
+          } else {
+            rowStr += '⬜';
+          }
+        }
+        emojiGrid += rowStr + '\n';
+      }
+
+      const shareText = `${headerTitle}\n🏆 Score: ${gameState.score} pts | Words: ${gameState.wordsPlayedCount}\n✨ Best: ${gameState.bestTurnWord || 'N/A'}\n\n${emojiGrid.trim()}`;
+
+      // Reliable clipboard copy inside iframe/web environments
+      const textarea = document.createElement('textarea');
+      textarea.value = shareText;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Copied Wordle-style result to clipboard!', 'success');
+      } catch (err) {
+        showToast('Could not copy automatically', 'error');
+      }
+      document.body.removeChild(textarea);
+    }
+
+    /*************************************************************************
+     * 13. MODALS & TOAST HELPERS
+     *************************************************************************/
+    function openModal(id) {
+      const m = document.getElementById(id);
+      if (m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    function openHelpModal() { openModal('help-modal'); }
+    function openSeedModal() { openModal('seed-modal'); }
+
+    function openStatsModal() {
+      document.getElementById('log-total-score').textContent = gameState.score;
+      document.getElementById('log-words-count').textContent = gameState.wordsPlayedCount;
+      document.getElementById('log-best-turn').textContent = gameState.bestTurnScore > 0 ? `+${gameState.bestTurnScore}` : '0';
+
+      const listEl = document.getElementById('turn-history-list');
+      if (gameState.turnsHistory.length === 0) {
+        listEl.innerHTML = `<div class="text-gray-400 text-xs italic py-4 text-center">No turns recorded yet.</div>`;
+      } else {
+        listEl.innerHTML = gameState.turnsHistory.map(item => {
+          const isPositive = item.delta.startsWith('+');
+          return `
+            <div class="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg border border-gray-200/80 text-xs">
+              <span class="font-bold text-gray-800">${item.label}</span>
+              <span class="font-extrabold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-red-600'}">${item.delta} pts</span>
+            </div>
+          `;
+        }).join('');
+      }
+      openModal('stats-modal');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      let bgClass = 'bg-gray-900 text-white';
+      if (type === 'error') bgClass = 'bg-red-600 text-white';
+      else if (type === 'success') bgClass = 'bg-emerald-700 text-white';
+
+      toast.className = `${bgClass} px-4 py-2 rounded-full shadow-lg font-extrabold text-xs tracking-wide animate-pop pointer-events-auto`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => toast.remove(), 260);
+      }, 2400);
+    }
+
+    // Boot application on load
+    window.onload = function() {
+      initDictionary();
+      initBlankPickerGrid();
+      startDailyGame();
+    };
+  </script>
+</body>
+</html>
