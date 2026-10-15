@@ -274,13 +274,33 @@
     }
 
     .rack-tile.selected-for-swap {
-      transform: translateY(-6px);
-      box-shadow: 0 7px 0 #9333EA, 0 8px 12px rgba(147, 51, 234, 0.28), 0 0 0 2.5px #9333EA;
+      transform: translateY(-7px) scale(1.04);
+      box-shadow: 0 7px 0 #7E22CE, 0 8px 12px rgba(147, 51, 234, 0.32), 0 0 0 2.5px #9333EA;
+      background: linear-gradient(180deg, #FAF5FF 0%, #E9D5FF 100%);
     }
 
     .rack-tile.selected-for-discard {
-      transform: translateY(-6px);
-      box-shadow: 0 7px 0 #DC2626, 0 8px 12px rgba(220, 38, 38, 0.28), 0 0 0 2.5px #DC2626;
+      transform: translateY(-7px) scale(1.04);
+      box-shadow: 0 7px 0 #B91C1C, 0 8px 12px rgba(220, 38, 38, 0.32), 0 0 0 2.5px #DC2626;
+      background: linear-gradient(180deg, #FEF2F2 0%, #FECACA 100%);
+    }
+
+    .tile-select-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 16px;
+      height: 16px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 900;
+      color: #FFFFFF;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+      pointer-events: none;
+      z-index: 5;
     }
 
     .rack-tile .tile-letter {
@@ -1346,16 +1366,26 @@
             }
           }
 
+          const isSelectedSwap = gameState.actionMode === 'swap' && gameState.selectedSetForSwapOrDiscard.has(i);
+          const isSelectedDiscard = gameState.actionMode === 'discard' && gameState.selectedSetForSwapOrDiscard.has(i);
+
           if (gameState.actionMode === 'play' && gameState.selectedRackIndex === i) {
             tileDiv.classList.add('selected-for-play');
-          } else if (gameState.actionMode === 'swap' && gameState.selectedSetForSwapOrDiscard.has(i)) {
+          } else if (isSelectedSwap) {
             tileDiv.classList.add('selected-for-swap');
-          } else if (gameState.actionMode === 'discard' && gameState.selectedSetForSwapOrDiscard.has(i)) {
+          } else if (isSelectedDiscard) {
             tileDiv.classList.add('selected-for-discard');
           }
 
           const displayLetter = tile.isBlank ? '?' : tile.letter;
+          const badgeHtml = isSelectedSwap
+            ? `<span class="tile-select-badge bg-purple-600">✓</span>`
+            : isSelectedDiscard
+              ? `<span class="tile-select-badge bg-red-600">✓</span>`
+              : '';
+
           tileDiv.innerHTML = `
+            ${badgeHtml}
             <span class="tile-letter">${displayLetter}</span>
             <span class="tile-points">${tile.points}</span>
           `;
@@ -1364,7 +1394,12 @@
             if (gameState.actionMode === 'play') {
               tileDiv.addEventListener('pointerdown', (e) => startPointerDrag(e, { source: 'rack', rackIdx: i, tile }));
             } else {
-              tileDiv.addEventListener('click', () => handleRackTileClick(i));
+              // In Swap or Burn mode, toggle immediately on pointerdown so mobile & desktop taps never miss
+              tileDiv.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRackTileClick(i);
+              });
             }
           }
 
@@ -1407,12 +1442,12 @@
       if (gameState.actionMode === 'swap') {
         submitBtn.classList.add('mode-swap');
         const count = gameState.selectedSetForSwapOrDiscard.size;
-        submitText.textContent = count > 0 ? `SWAP ${count} (-${count * SWAP_PENALTY_PER_TILE})` : 'SELECT TO SWAP';
+        submitText.textContent = count > 0 ? `SWAP (${count}) -${count * SWAP_PENALTY_PER_TILE}` : 'TAP TILES TO SWAP';
       } else if (gameState.actionMode === 'discard') {
         submitBtn.classList.add('mode-discard');
         const count = gameState.selectedSetForSwapOrDiscard.size;
         const pen = calculateSelectedDiscardPenalty();
-        submitText.textContent = count > 0 ? `BURN ${count} (-${pen})` : 'SELECT TO BURN';
+        submitText.textContent = count > 0 ? `BURN (${count}) -${pen}` : 'TAP TILES TO BURN';
       } else {
         submitText.textContent = 'PLAY WORD';
       }
@@ -2004,11 +2039,13 @@
           badge.classList.remove('hidden');
           badge.className = 'absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-purple-600 shadow-sm tabular-nums';
           badge.textContent = `-${pen}`;
+          statusEl.className = 'text-[0.72rem] font-bold text-purple-800 bg-purple-100 px-3 py-0.5 rounded-full border border-purple-300';
+          statusEl.textContent = `${count} selected (-${pen} pts) — Tap ⇄ or SWAP (${count}) to confirm`;
         } else {
           badge.classList.add('hidden');
+          statusEl.className = 'text-[0.72rem] font-bold text-purple-700 bg-purple-50 px-3 py-0.5 rounded-full border border-purple-200';
+          statusEl.textContent = `SWAP MODE: Tap rack tiles to select (-3 pts/tile), or tap ⇄ to cancel`;
         }
-        statusEl.className = 'text-[0.72rem] font-bold text-purple-700 bg-purple-50 px-3 py-0.5 rounded-full border border-purple-200';
-        statusEl.textContent = `SWAP MODE: Select rack tiles to cycle to back of queue (-3 pts/tile)`;
         return;
       }
 
@@ -2019,11 +2056,13 @@
           badge.classList.remove('hidden');
           badge.className = 'absolute -top-2.5 -right-1 px-1.5 py-0.5 rounded-full text-[0.68rem] font-extrabold text-white bg-red-600 shadow-sm tabular-nums';
           badge.textContent = `-${pen}`;
+          statusEl.className = 'text-[0.72rem] font-bold text-red-800 bg-red-100 px-3 py-0.5 rounded-full border border-red-300';
+          statusEl.textContent = `${count} selected (-${pen} pts) — Tap 🗑 or BURN (${count}) to confirm`;
         } else {
           badge.classList.add('hidden');
+          statusEl.className = 'text-[0.72rem] font-bold text-red-700 bg-red-50 px-3 py-0.5 rounded-full border border-red-200';
+          statusEl.textContent = `BURN MODE: Tap rack tiles to trash (-face value), or tap 🗑 to cancel`;
         }
-        statusEl.className = 'text-[0.72rem] font-bold text-red-700 bg-red-50 px-3 py-0.5 rounded-full border border-red-200';
-        statusEl.textContent = `BURN MODE: Select rack tiles to permanently trash (-face value)`;
         return;
       }
 
@@ -2135,35 +2174,82 @@
       if (gameState.isGameOver) return;
       ensureTimerStarted();
 
-      // First recall any tentative tiles on board back to rack
-      recallTentativeTilesQuietly();
-
+      // If already in this mode:
       if (gameState.actionMode === targetMode) {
-        gameState.actionMode = 'play';
-        gameState.selectedSetForSwapOrDiscard.clear();
-      } else {
-        if (targetMode === 'swap' && gameState.queue.length === 0) {
-          showToast('No tiles left in queue to swap!', 'error');
+        // Clicking the Swap (⇄) or Burn (🗑) button a second time after selecting tiles executes the action!
+        if (gameState.selectedSetForSwapOrDiscard.size > 0) {
+          if (targetMode === 'swap') {
+            executeSwapSelected();
+          } else if (targetMode === 'discard') {
+            executeDiscardSelected();
+          }
           return;
         }
-        gameState.actionMode = targetMode;
+        // If 0 tiles are selected, clicking the active mode button again cancels back to play mode
+        gameState.actionMode = 'play';
         gameState.selectedSetForSwapOrDiscard.clear();
-        gameState.selectedRackIndex = null;
+        playSound('select');
+        renderAll();
+        return;
       }
+
+      // First recall any tentative tiles on board back to rack so all 7 rack tiles are available
+      recallTentativeTilesQuietly();
+
+      if (targetMode === 'swap' && gameState.queue.length === 0) {
+        showToast('No tiles left in bag to swap!', 'error');
+        return;
+      }
+
+      gameState.actionMode = targetMode;
+      gameState.selectedSetForSwapOrDiscard.clear();
+      gameState.selectedRackIndex = null;
       playSound('select');
       renderAll();
     }
 
     function calculateSelectedDiscardPenalty() {
-      // Deterministic Swap: Draw replacement from front of queue into the exact selected rack slots,
-      // and push swapped tiles to the VERY BACK of the queue in order
+      let penalty = 0;
+      gameState.selectedSetForSwapOrDiscard.forEach(idx => {
+        const t = gameState.rack[idx];
+        if (t) {
+          penalty += t.isBlank ? BLANK_DISCARD_PENALTY : t.points;
+        }
+      });
+      return penalty;
+    }
+
+    function executeSwapSelected() {
+      const indices = Array.from(gameState.selectedSetForSwapOrDiscard).sort((a, b) => a - b);
+      if (indices.length === 0) {
+        showToast('Tap 1 or more tiles on your rack to swap', 'info');
+        return;
+      }
+      if (gameState.queue.length === 0) {
+        showToast('No tiles left in bag to swap!', 'error');
+        gameState.actionMode = 'play';
+        gameState.selectedSetForSwapOrDiscard.clear();
+        renderAll();
+        return;
+      }
+      if (indices.length > gameState.queue.length) {
+        showToast(`Only ${gameState.queue.length} tile(s) left in bag to swap!`, 'error');
+        return;
+      }
+
+      const penalty = indices.length * SWAP_PENALTY_PER_TILE;
+      const swappedLetters = [];
       const outgoingTiles = [];
       let drawStagger = 0;
+
+      // Deterministic Swap: Draw replacement from front of queue into the exact selected rack slots,
+      // and push swapped tiles to the VERY BACK of the queue in order
       indices.forEach(idx => {
         const t = gameState.rack[idx];
         if (t) {
           t.justDrawn = false;
-          swappedLetters.push(t.letter);
+          t.drawDelayMs = 0;
+          swappedLetters.push(t.isBlank ? '?' : t.letter);
           outgoingTiles.push(t);
           const nextTile = gameState.queue.shift() || null;
           if (nextTile) {
@@ -2188,8 +2274,9 @@
 
       gameState.actionMode = 'play';
       gameState.selectedSetForSwapOrDiscard.clear();
+      gameState.selectedRackIndex = null;
       playSound('place');
-      showToast(`Swapped ${indices.length} tile(s) (-${penalty} pts)`, 'info');
+      showToast(`Swapped ${indices.length} tile${indices.length > 1 ? 's' : ''} (-${penalty} pts)`, 'info');
       renderAll();
       clearJustDrawnFlagsSoon();
     }
@@ -2207,7 +2294,7 @@
       indices.forEach(idx => {
         const t = gameState.rack[idx];
         if (t) {
-          burnedLetters.push(t.letter);
+          burnedLetters.push(t.isBlank ? '?' : t.letter);
           gameState.rack[idx] = null;
         }
       });
@@ -2224,8 +2311,9 @@
 
       gameState.actionMode = 'play';
       gameState.selectedSetForSwapOrDiscard.clear();
+      gameState.selectedRackIndex = null;
       playSound('place');
-      showToast(`Burned ${indices.length} tile(s) (-${penalty} pts)`, 'info');
+      showToast(`Burned ${indices.length} tile${indices.length > 1 ? 's' : ''} (-${penalty} pts)`, 'info');
       renderAll();
       clearJustDrawnFlagsSoon();
       checkAutoEndgame();
